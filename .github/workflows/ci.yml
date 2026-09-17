@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm install
+
+      # The JSDoc comments are the type system here, so this is a real gate,
+      # not a formality.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      # The convergence test is random. A second run with a different seed
+      # catches a bug that only shows up for some inputs.
+      - name: Tests again, different seed
+        run: npm test
+        env:
+          SEED: ${{ github.run_id }}

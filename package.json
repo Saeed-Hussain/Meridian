@@ -1,0 +1,21 @@
+{
+  "name": "meridian",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "node --test \"packages/core/test/*.test.js\"",
+    "test:watch": "node --test --watch \"packages/core/test/*.test.js\"",
+    "typecheck": "tsc --noEmit -p jsconfig.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "typescript": "^5.9.3"
+  }
+}

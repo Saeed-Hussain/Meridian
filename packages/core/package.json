@@ -1,0 +1,13 @@
+{
+  "name": "@meridian/core",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The merge algorithm. Plain JavaScript, no dependencies, no framework.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  }
+}
