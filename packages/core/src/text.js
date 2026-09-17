@@ -358,6 +358,47 @@ export class Text {
   }
 
   /**
+   * Take in another replica's whole state, rather than its individual changes.
+   *
+   * This is needed when a peer has thrown away old changes to save space and so
+   * cannot replay them one by one. Merging states works because the pieces only
+   * ever grow: letters are added and never moved, and a deletion never turns
+   * back into a live letter.
+   *
+   * The saved order puts every parent before its children, so letters can be
+   * taken in the order given.
+   *
+   * @param {any} json State from `toJSON`.
+   */
+  mergeState(json) {
+    for (const [id, parent, value, deleted] of json.letters) {
+      this.applyInsert({ type: 'insert', id, parent, value });
+      if (deleted) {
+        const letter = this.letters.get(id);
+        // Deleting only ever goes one way. If either side has hidden this
+        // letter, it stays hidden — never revived because the other side's
+        // state is older.
+        if (letter && !letter.deleted) {
+          letter.deleted = true;
+          this.cache = null;
+        } else if (!letter) {
+          this.waitingDeletes.add(id);
+        }
+      }
+    }
+    for (const op of json.waiting ?? []) this.applyInsert(op);
+    for (const target of json.waitingDeletes ?? []) {
+      const letter = this.letters.get(target);
+      if (letter) {
+        letter.deleted = true;
+        this.cache = null;
+      } else {
+        this.waitingDeletes.add(target);
+      }
+    }
+  }
+
+  /**
    * @param {Clock} clock
    * @param {any} json
    * @returns {Text}

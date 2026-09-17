@@ -29,6 +29,17 @@ export class OpLog {
      * @type {Map<string, {upto: number, ahead: Set<number>}>}
      */
     this.seen = new Map();
+    /**
+     * Changes we hold the *result* of but can no longer produce one by one,
+     * because a snapshot replaced them or they arrived as whole state.
+     *
+     * This is not bookkeeping for its own sake. Without it, a peer that is
+     * behind the trim point would ask for changes that no longer exist, get
+     * nothing back, and quietly stay wrong forever. `tooFarBehind` exists to
+     * catch that case and send whole state instead.
+     * @type {Version}
+     */
+    this.trimmed = {};
   }
 
   /**
@@ -70,9 +81,53 @@ export class OpLog {
    */
   version() {
     /** @type {Version} */
-    const out = {};
-    for (const [site, entry] of this.seen) out[site] = entry.upto;
+    const out = { ...this.trimmed };
+    for (const [site, entry] of this.seen) {
+      out[site] = Math.max(out[site] ?? 0, entry.upto);
+    }
     return out;
+  }
+
+  /**
+   * True when a peer is so far behind that the changes it needs have been
+   * trimmed away. The only correct answer then is to send whole state.
+   *
+   * @param {Version} theirs
+   * @returns {boolean}
+   */
+  tooFarBehind(theirs) {
+    for (const [site, upto] of Object.entries(this.trimmed)) {
+      if ((theirs[site] ?? 0) < upto) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Drop the stored changes, keeping only the record that we hold their result.
+   * The caller must have saved a snapshot of the state first, or the document
+   * is lost.
+   *
+   * @returns {number} How many changes were dropped.
+   */
+  trim() {
+    const dropped = this.ops.length;
+    this.trimmed = this.version();
+    this.ops = [];
+    this.ids.clear();
+    this.seen.clear();
+    return dropped;
+  }
+
+  /**
+   * Record that we now hold everything in another replica's state, without
+   * holding its individual changes.
+   *
+   * @param {Version} theirs
+   */
+  absorb(theirs) {
+    for (const [site, upto] of Object.entries(theirs)) {
+      if (upto > (this.trimmed[site] ?? 0)) this.trimmed[site] = upto;
+    }
   }
 
   /**
@@ -99,7 +154,7 @@ export class OpLog {
 
   /** @returns {object} */
   toJSON() {
-    return { ops: this.ops };
+    return { ops: this.ops, trimmed: this.trimmed };
   }
 
   /**
@@ -108,6 +163,7 @@ export class OpLog {
    */
   static fromJSON(json) {
     const log = new OpLog();
+    log.trimmed = { ...(json.trimmed ?? {}) };
     for (const op of json.ops ?? []) log.add(op);
     return log;
   }

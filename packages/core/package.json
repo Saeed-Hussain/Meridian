@@ -5,7 +5,9 @@
   "description": "The merge algorithm. Plain JavaScript, no dependencies, no framework.",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./testing": "./src/testing.js",
+    "./src/*": "./src/*"
   },
   "scripts": {
     "test": "node --test \"test/*.test.js\""

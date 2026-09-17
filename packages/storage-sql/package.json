@@ -1,0 +1,13 @@
+{
+  "name": "@meridian/storage-sql",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Saves a document to SQLite. Works with node:sqlite or better-sqlite3.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  }
+}

@@ -11,13 +11,15 @@ peers to each other — it never sees what you write.
 
 ## Status
 
-**The merge algorithm works and is proven.** Weeks 1 to 5 of the plan are done.
+**The merge algorithm works, and work now survives a crash.** Weeks 1 to 6 done.
 
-- 33 tests pass, including hundreds of random convergence runs per seed.
+- 67 tests pass, including hundreds of random convergence runs per seed.
 - Typecheck is clean under `strict`, from JSDoc comments — no TypeScript.
 - Zero dependencies in the core. Nothing to install to run the tests.
+- Saving to SQLite and IndexedDB, both passing one shared test kit.
 
-Next: saving to disk (week 6), then the network (week 7).
+Next: the signalling server and WebRTC (week 7), which gives the first live
+two-tab demo.
 
 ```bash
 npm install     # only needed for the typecheck tools
@@ -49,10 +51,12 @@ your viewer first — Windows will not let the script overwrite an open file.
 ## Layout
 
 ```
-packages/core     the merge algorithm, plain JavaScript, no framework   BUILT
-apps/web          Next.js interface and demo                            week 9
-apps/desktop      Electron wrapper                                      week 11
-server/signal     small WebSocket server that introduces peers          week 7
+packages/core          the merge algorithm, plain JavaScript, no deps   BUILT
+packages/storage-sql   saves to SQLite, for desktop and Node           BUILT
+packages/storage-idb   saves to IndexedDB, for the browser             BUILT
+apps/web               Next.js interface and demo                      week 9
+apps/desktop           Electron wrapper                                week 11
+server/signal          WebSocket server that introduces peers          week 7
 ```
 
 The core must never import Next.js, React or anything from the browser. That rule is

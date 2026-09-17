@@ -127,6 +127,23 @@ export class TagSet {
   }
 
   /**
+   * Take in another replica's whole state.
+   *
+   * Both halves only ever grow, so merging is the union of each: every tag ever
+   * added, and every tag ever removed. An element is still present when it has
+   * an added tag that nobody removed.
+   *
+   * @param {any} json State from `toJSON`.
+   */
+  mergeState(json) {
+    for (const [value, added, removed] of json.elements ?? []) {
+      const entry = this.entry(value);
+      for (const tag of added) entry.added.add(tag);
+      for (const tag of removed) entry.removed.add(tag);
+    }
+  }
+
+  /**
    * @param {Clock} clock
    * @param {any} json
    * @returns {TagSet}

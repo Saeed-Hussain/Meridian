@@ -167,11 +167,46 @@ export class Doc {
    * for two peers on one machine; real peers exchange the same two messages
    * over the network.
    *
+   * If the other side is behind changes this one has trimmed away, whole state
+   * is sent instead. Sending nothing would leave them silently wrong, which is
+   * the worst outcome available.
+   *
    * @param {Doc} other
-   * @returns {number} How many changes were sent.
+   * @returns {number} Changes sent, or -1 when whole state was sent instead.
    */
   syncTo(other) {
-    return other.receive(this.missing(other.version())).length;
+    const theirs = other.version();
+    if (this.log.tooFarBehind(theirs)) {
+      other.mergeState(this.snapshot());
+      return -1;
+    }
+    return other.receive(this.missing(theirs)).length;
+  }
+
+  /**
+   * Take in another replica's whole state.
+   *
+   * Used when changes cannot be replayed one by one — after the other side has
+   * compacted, or when a new device joins a long-lived document and replaying
+   * its whole history would be wasteful.
+   *
+   * This is safe to apply repeatedly and in any order, for the same reason the
+   * individual changes are: each part of the state only ever grows, and the
+   * merge rules pick the same winner everywhere.
+   *
+   * @param {any} state From `snapshot()`.
+   */
+  mergeState(state) {
+    this.text.mergeState(state.text);
+    this.fields.mergeState(state.fields);
+    this.tags.mergeState(state.tags);
+    // Keep our own counter ahead of every id in their state, or we would hand
+    // out an id that already exists.
+    for (const [site, upto] of Object.entries(state.covers ?? {})) {
+      this.clock.observe(`${upto}@${site}`);
+    }
+    this.log.absorb(state.covers ?? {});
+    this.emit([]);
   }
 
   // ------------------------------------------------------------------- watching
@@ -205,14 +240,57 @@ export class Doc {
    * @returns {object}
    */
   toJSON() {
+    return { ...this.snapshot(), log: this.log.toJSON() };
+  }
+
+  /**
+   * The document's state, without the list of changes that produced it.
+   *
+   * This is what gets saved when the change log is compacted, and what gets
+   * sent to a peer that is too far behind for individual changes.
+   *
+   * @returns {object}
+   */
+  snapshot() {
     return {
       version: 1,
       clock: this.clock.toJSON(),
       text: this.text.toJSON(),
       fields: this.fields.toJSON(),
       tags: this.tags.toJSON(),
-      log: this.log.toJSON(),
+      covers: this.version(),
     };
+  }
+
+  /**
+   * Rebuild from state alone. The document can be read, edited and synced, but
+   * cannot hand out the individual changes that built it.
+   *
+   * @param {any} state From `snapshot()`.
+   * @returns {Doc}
+   */
+  static fromSnapshot(state) {
+    const doc = new Doc(state.clock.site);
+    doc.clock = Clock.fromJSON(state.clock);
+    doc.text = Text.fromJSON(doc.clock, state.text);
+    doc.fields = FieldMap.fromJSON(doc.clock, state.fields);
+    doc.tags = TagSet.fromJSON(doc.clock, state.tags);
+    doc.log = new OpLog();
+    doc.log.trimmed = { ...(state.covers ?? {}) };
+    return doc;
+  }
+
+  /**
+   * Throw away the individual changes, keeping the state.
+   *
+   * The caller is responsible for having saved the snapshot first. Returns it
+   * so that saving and trimming cannot drift apart.
+   *
+   * @returns {{state: object, dropped: number}}
+   */
+  compact() {
+    const state = this.snapshot();
+    return { state, dropped: this.log.trim() };
   }
 
   /**

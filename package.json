@@ -7,8 +7,8 @@
     "apps/*"
   ],
   "scripts": {
-    "test": "node --test \"packages/core/test/*.test.js\"",
-    "test:watch": "node --test --watch \"packages/core/test/*.test.js\"",
+    "test": "node --test \"packages/*/test/*.test.js\"",
+    "test:watch": "node --test --watch \"packages/*/test/*.test.js\"",
     "typecheck": "tsc --noEmit -p jsconfig.json"
   },
   "engines": {
@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^5.9.3"
   }
 }

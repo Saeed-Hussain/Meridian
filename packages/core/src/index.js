@@ -7,6 +7,7 @@
  */
 
 export { Doc } from './doc.js';
+export { open, Persistence, MemoryStore } from './storage.js';
 export { Text } from './text.js';
 export { FieldMap } from './map.js';
 export { TagSet } from './set.js';

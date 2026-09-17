@@ -1,0 +1,10 @@
+{
+  "name": "@meridian/storage-idb",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Saves a document to IndexedDB, for the browser.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  }
+}

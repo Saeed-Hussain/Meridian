@@ -78,6 +78,18 @@ export class FieldMap {
   }
 
   /**
+   * Take in another replica's whole state. Same rule as a single change: the
+   * higher id wins, so merging is safe to repeat and order does not matter.
+   *
+   * @param {any} json State from `toJSON`.
+   */
+  mergeState(json) {
+    for (const [key, value, id] of json.entries ?? []) {
+      this.apply({ type: 'field', id, key, value });
+    }
+  }
+
+  /**
    * @param {Clock} clock
    * @param {any} json
    * @returns {FieldMap}
