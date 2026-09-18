@@ -20,6 +20,24 @@ const TICK = 3000;
 const COLOURS = ['#e0544e', '#2d7ff9', '#37a06a', '#b45bd6', '#d98324', '#0f9bb5'];
 
 /**
+ * Where the introduction service is.
+ *
+ * Defaults to port 8080 on whatever host served the page, which is right for
+ * `npm run signal` on the same machine. Set `NEXT_PUBLIC_SIGNAL_URL` to point
+ * somewhere else — needed when 8080 is taken and the server was started on
+ * another port.
+ *
+ * @param {string} [override]
+ * @returns {string}
+ */
+function signalAddress(override) {
+  if (override) return override;
+  if (process.env.NEXT_PUBLIC_SIGNAL_URL) return process.env.NEXT_PUBLIC_SIGNAL_URL;
+  const secure = globalThis.location.protocol === 'https:';
+  return `${secure ? 'wss' : 'ws'}://${globalThis.location.hostname}:8080`;
+}
+
+/**
  * This tab's device id.
  *
  * Two tabs of the same browser share one IndexedDB, so they cannot share a
@@ -128,7 +146,7 @@ export function useDocument({ id, name, signalUrl }) {
       // signalling server can match two people without learning what they are
       // working on.
       room = joinRoom({
-        url: signalUrl ?? `ws://${globalThis.location.hostname}:8080`,
+        url: signalAddress(signalUrl),
         room: await roomFor(id),
         network: net,
         onState: (state) => alive && setStatus(state),
@@ -155,7 +173,7 @@ export function useDocument({ id, name, signalUrl }) {
         async online() {
           if (room) return;
           room = joinRoom({
-            url: signalUrl ?? `ws://${globalThis.location.hostname}:8080`,
+            url: signalAddress(signalUrl),
             room: await roomFor(id),
             network: net,
             onState: (state) => alive && setStatus(state),

@@ -87,6 +87,12 @@ const browser = await puppeteer.launch({
 try {
   console.log(`document ${docId}\n`);
 
+  // Ask for the page once before timing anything. In development Next compiles
+  // a route the first time it is requested, and that delay landed inside the
+  // concurrent-edit check -- which then failed for being slow rather than for
+  // being wrong. Warming it up first makes the test measure the app.
+  await fetch(url).catch(() => {});
+
   // Separate browser contexts, so the two tabs get separate storage. Two tabs
   // of one profile share an IndexedDB, which would make this a test of one
   // device talking to itself rather than of two devices syncing.
@@ -126,6 +132,12 @@ try {
   await Promise.all([type(one, ' AAA'), type(two, ' BBB')]);
   const settledOne = await until(one, (text) => text.includes('AAA') && text.includes('BBB'));
   const settledTwo = await until(two, (text) => text === settledOne);
+  if (!(settledOne.includes('AAA') && settledOne.includes('BBB'))) {
+    // Print both sides, so a failure here says whether the edits were lost or
+    // simply had not arrived yet. Those need completely different fixes.
+    console.log(`         tab one: ${JSON.stringify(settledOne)}`);
+    console.log(`         tab two: ${JSON.stringify(settledTwo)}`);
+  }
   check('both edits survive', settledOne.includes('AAA') && settledOne.includes('BBB'), true);
   check('and the two tabs agree', settledTwo, settledOne);
 

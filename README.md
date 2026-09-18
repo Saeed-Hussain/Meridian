@@ -27,16 +27,30 @@ Next: offline history and a time slider (week 10), then the desktop app.
 
 ## Try it
 
-Two terminals:
+It needs **two terminals**, because both commands keep running. Running them one
+after the other in a single terminal will not work: the first never finishes.
+
+Terminal 1 — the introduction service:
 
 ```bash
 npm install
-npm run signal   # introduces peers, on ws://localhost:8080
-npm run web      # the app, on http://localhost:3000
+npm run signal
 ```
 
-Open a document, copy the address into a second window, and type. Then turn off
-your internet and keep typing — it all merges when you come back.
+Leave that running. Terminal 2 — the app:
+
+```bash
+npm run web
+```
+
+Then open <http://localhost:3000>, start a document, and paste its address into a
+second browser window. Type in one and watch the other. Turn your internet off
+and keep typing — it all merges when you come back.
+
+Stop either one with **Ctrl + C**. If the signalling server says port 8080 is
+already in use, an earlier run is still going: `npx kill-port 8080`.
+
+## Checking it
 
 ```bash
 npm test            # 126 tests, about three seconds
@@ -44,7 +58,8 @@ npm run typecheck
 npm run two-tabs    # the whole thing, in two real browsers
 ```
 
-The browser test needs the app and the signalling server already running.
+`two-tabs` needs the app and the signalling server already running, in their two
+terminals, as above.
 
 ## Documents
 

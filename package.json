@@ -11,7 +11,11 @@
     "test": "node --test \"packages/*/test/*.test.js\" \"server/*/test/*.test.js\"",
     "test:watch": "node --test --watch \"packages/*/test/*.test.js\" \"server/*/test/*.test.js\"",
     "typecheck": "tsc --noEmit -p jsconfig.json",
-    "signal": "node server/signal/src/serve.js"
+    "signal": "node server/signal/src/serve.js",
+    "web": "npm run dev --workspace @meridian/web",
+    "build:web": "npm run build --workspace @meridian/web",
+    "two-tabs": "node tools/two-tabs.js",
+    "shot": "node tools/shot.js"
   },
   "engines": {
     "node": ">=22"
