@@ -46,7 +46,7 @@
  * by snapshots, once every device is known to have moved past them.
  */
 
-import { compareIds } from './id.js';
+import { compareStamps } from './id.js';
 
 /** @typedef {import('./id.js').Id} Id */
 /** @typedef {import('./id.js').Clock} Clock */
@@ -58,6 +58,7 @@ import { compareIds } from './id.js';
  * @property {Id | null} parent Id of the letter this was typed after, or null for the start.
  * @property {string} value One character.
  * @property {boolean} deleted
+ * @property {number} l The stamp that orders it against its siblings.
  */
 
 /**
@@ -67,6 +68,7 @@ import { compareIds } from './id.js';
  * @property {Id} id Doubles as the new letter's id.
  * @property {Id | null} parent
  * @property {string} value
+ * @property {number} l
  *
  * @typedef {object} DeleteOp
  * @property {'delete'} type
@@ -147,13 +149,9 @@ export class Text {
     const ops = [];
 
     for (const character of value) {
+      const { id, l } = this.clock.next();
       /** @type {InsertOp} */
-      const op = {
-        type: 'insert',
-        id: this.clock.next(),
-        parent,
-        value: character,
-      };
+      const op = { type: 'insert', id, parent, value: character, l };
       this.applyInsert(op);
       ops.push(op);
       parent = op.id;
@@ -181,7 +179,7 @@ export class Text {
     const ops = [];
     for (const letter of visible.slice(index, index + count)) {
       /** @type {DeleteOp} */
-      const op = { type: 'delete', id: this.clock.next(), target: letter.id };
+      const op = { type: 'delete', id: this.clock.next().id, target: letter.id };
       this.applyDelete(op);
       ops.push(op);
     }
@@ -221,7 +219,7 @@ export class Text {
       return;
     }
 
-    this.clock.observe(op.id);
+    this.clock.witness(op.id, op.l);
 
     /** @type {Letter} */
     const letter = {
@@ -229,16 +227,23 @@ export class Text {
       parent: op.parent,
       value: op.value,
       deleted: this.waitingDeletes.delete(op.id),
+      l: op.l ?? 0,
     };
     this.letters.set(op.id, letter);
 
     const key = op.parent ?? ROOT;
     const siblings = this.children.get(key);
     if (siblings) {
-      // Newest first. A plain sort would also work; this inserts in place
-      // because sibling lists are short and usually length one.
+      // Newest first, by stamp. A plain sort would also work; this inserts
+      // in place because sibling lists are short and usually length one.
+      //
+      // The stamp is what makes a letter typed between two others land
+      // between them: its writer had seen the letter to its right, so its
+      // stamp beats it. Sorting by name instead let a device with a low
+      // counter push its letter to the wrong side of a letter it was
+      // deliberately typed in front of.
       let at = 0;
-      while (at < siblings.length && compareIds(siblings[at], op.id) > 0) at += 1;
+      while (at < siblings.length && this.sortsAfter(siblings[at], op)) at += 1;
       siblings.splice(at, 0, op.id);
     } else {
       this.children.set(key, [op.id]);
@@ -255,11 +260,25 @@ export class Text {
   }
 
   /**
+   * Whether an existing sibling sorts after an incoming one.
+   *
+   * @param {Id} existingId
+   * @param {InsertOp} incoming
+   * @returns {boolean}
+   * @private
+   */
+  sortsAfter(existingId, incoming) {
+    const existing = this.letters.get(existingId);
+    if (!existing) return false;
+    return compareStamps(existing.l, existing.id, incoming.l ?? 0, incoming.id) > 0;
+  }
+
+  /**
    * @param {DeleteOp} op
    * @private
    */
   applyDelete(op) {
-    this.clock.observe(op.id);
+    this.clock.witness(op.id);
     const letter = this.letters.get(op.target);
     if (!letter) {
       this.waitingDeletes.add(op.target);
@@ -331,6 +350,47 @@ export class Text {
     return this.visible().length;
   }
 
+  // -------------------------------------------------------------------- cursors
+
+  /**
+   * The letter a cursor at this position sits after.
+   *
+   * A cursor cannot be stored as a number. Someone typing earlier in the
+   * document shifts every number after them, and the cursor would appear to
+   * jump — which is the single most irritating bug in collaborative editors.
+   *
+   * An id does not move. The letter a cursor sits after is the same letter no
+   * matter what anyone types elsewhere.
+   *
+   * @param {number} index
+   * @returns {Id | null} Null for the start of the document.
+   */
+  anchorAt(index) {
+    if (index <= 0) return null;
+    const visible = this.visible();
+    return visible[Math.min(index, visible.length) - 1]?.id ?? null;
+  }
+
+  /**
+   * Turn an anchor back into a position.
+   *
+   * A hidden letter still counts as an anchor: if the letter a cursor sat after
+   * has since been deleted by someone else, the cursor belongs where that
+   * letter used to be, not at the start of the document.
+   *
+   * @param {Id | null} anchor
+   * @returns {number}
+   */
+  indexAfter(anchor) {
+    if (anchor === null) return 0;
+    let index = 0;
+    for (const letter of this.order()) {
+      if (letter.id === anchor) return index + (letter.deleted ? 0 : 1);
+      if (!letter.deleted) index += 1;
+    }
+    return index; // the anchor is unknown here; the end is the safest guess
+  }
+
   /**
    * True when nothing is being held back. Useful in tests: a replica that has
    * received every change should have an empty waiting room, and if it does
@@ -351,6 +411,7 @@ export class Text {
         letter.parent,
         letter.value,
         letter.deleted ? 1 : 0,
+        letter.l,
       ]),
       waiting: [...this.waiting.values()].flat(),
       waitingDeletes: [...this.waitingDeletes],
@@ -371,8 +432,8 @@ export class Text {
    * @param {any} json State from `toJSON`.
    */
   mergeState(json) {
-    for (const [id, parent, value, deleted] of json.letters) {
-      this.applyInsert({ type: 'insert', id, parent, value });
+    for (const [id, parent, value, deleted, l] of json.letters) {
+      this.applyInsert({ type: 'insert', id, parent, value, l: l ?? 0 });
       if (deleted) {
         const letter = this.letters.get(id);
         // Deleting only ever goes one way. If either side has hidden this
@@ -407,8 +468,8 @@ export class Text {
     const text = new Text(clock);
     // Saved in reading order, so every parent lands before its children and
     // nothing goes through the waiting room on the way back in.
-    for (const [id, parent, value, deleted] of json.letters) {
-      text.applyInsert({ type: 'insert', id, parent, value });
+    for (const [id, parent, value, deleted, l] of json.letters) {
+      text.applyInsert({ type: 'insert', id, parent, value, l: l ?? 0 });
       if (deleted) {
         const letter = text.letters.get(id);
         if (letter) letter.deleted = true;

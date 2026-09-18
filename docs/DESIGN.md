@@ -4,7 +4,7 @@ This is the written version of the algorithm in `packages/core`. It is the
 document to read before changing anything in `text.js`.
 
 **Written:** 17 September 2026
-**Covers:** weeks 1 to 6 of the work plan
+**Covers:** weeks 1 to 9 of the work plan
 
 ---
 
@@ -37,9 +37,36 @@ Two ids are compared by counter first, then by site. The site part is only a
 tie-break. It does not matter which device wins a tie — only that every device
 picks the same winner.
 
-When a device loads a saved document, it moves its counter past every id it has
-seen. Without that, it would hand out an id it had already used, and two
-different changes would share one name.
+When a device loads a saved document, it moves its counter past every id **of its
+own** that it has seen. Without that, it would hand out an id it had already
+used, and two different changes would share one name.
+
+### Two counters, not one
+
+Every change also carries a second number, called its stamp. A change therefore
+has a **name** and a **position in an order**, and these need different rules:
+
+| | Name (`counter`) | Stamp (`lamport`) |
+|---|---|---|
+| Must be gapless per device | Yes | No |
+| Moves for other devices' changes | No | Yes |
+| Used for | Syncing, deduplication | Ordering |
+
+One counter cannot do both, and using one for both was a real bug in this
+project. The story is worth keeping:
+
+Syncing sends a summary of the form *"I hold everything from device X up to
+number N"*. That only means something if each device's own numbering is
+unbroken. But ordering needs the opposite: a letter typed between two others
+must beat the letter on its right, which means taking account of numbers from
+other devices.
+
+Doing both with one counter put holes in each device's own sequence — its next
+change might be number 9, with 1 to 8 never existing. The summary then could not
+move past the hole, so **the device reported holding none of its own changes**.
+Peers concluded it was permanently behind and greeted it forever, while the text
+itself was perfectly in sync. It took a partition test running over several
+rounds to see it at all.
 
 Code: `src/id.js`.
 
@@ -62,7 +89,13 @@ after that letter, then the next sibling.
 ### The tie-break
 
 Several letters can share a parent. That is what a conflict is. They are sorted
-**by id, newest first**.
+**by stamp, newest first**, with the device id breaking an exact tie.
+
+The stamp, not the name. A letter typed between two others was written by
+someone who had *seen* the letter on its right, so its stamp beats it and it
+lands in the right place. Sorting by name instead let a device with a low
+counter push its letter to the wrong side of a letter it was deliberately typed
+in front of.
 
 Because the tree is built only from `id` and `parent` — both of which never change
 — and the sort is fixed, every device builds the same tree from the same set of
@@ -267,7 +300,174 @@ replaying its entire history.
 
 ---
 
-## 11. How this is tested
+## 11. The network
+
+Nothing in `packages/sync` mentions WebRTC or WebSocket. A connection is just
+something that carries strings:
+
+```js
+{ send, onMessage, isOpen, onClose?, close? }
+```
+
+That is what makes the protocol testable over a fake network that drops,
+duplicates and reorders messages, which is where its real bugs were found. The
+one file that does know about WebRTC — `src/webrtc.js` — only opens a pipe and
+hands it over.
+
+### Four messages
+
+| Message | Meaning |
+|---|---|
+| `hello` | Here is everything I have |
+| `ops` | Here are changes you are missing |
+| `want` | I am too far behind for changes, send the whole document |
+| `state` | Here is the whole document |
+
+**Every hello is answered with a hello**, marked as an answer so the exchange
+stops after one round trip. That reply is not a nicety; without it the protocol
+does not work. A peer cannot know what to send until it knows what the other
+side has, and a peer holding nothing of its own believes it is up to date and so
+never speaks first. Both sides then sit silently, each waiting for the other,
+while the documents differ.
+
+### There is no message queue
+
+A dropped message, a connection that died mid-sentence, and a laptop shut for a
+week all have the same cure: say hello again. From one hello each side works out
+exactly what the other lacks, so anything lost is re-derived rather than
+retransmitted. Sends are allowed to fail silently for that reason.
+
+### Repair is a tick, not an event
+
+A handshake cannot survive being lost. On a link dropping a third of its
+messages the hello itself goes missing, and then neither side says anything
+more.
+
+So `Network.tick()` greets any peer that has not confirmed it holds everything we
+hold. The app calls it on a timer, every few seconds. Two details make it work:
+
+- **A hello doubles as the acknowledgement.** Nothing says "received"; the only
+  evidence a peer got our changes is its next hello reporting a version that
+  covers them.
+- **A tick sends changes too, not just a greeting.** Greeting alone would wait
+  for a reply before sending anything, which is the silent stand-off described
+  above.
+
+Measured: at 30% packet loss, two peers reconcile in **under a dozen tick
+rounds**, and the test fails rather than looping if repair is ever unbounded.
+
+### Relaying, and why it terminates
+
+Changes from one peer are passed to the others, so a group where everyone
+connects to one person still syncs fully.
+
+This sounds like it should never stop — A tells B, B tells A — and it stops for a
+precise reason: `Doc.receive` reports only the changes that were **new**, and
+only those are relayed. The second time a change comes round there is nothing to
+pass on, so it dies there. The change ids do the work a hop counter would
+otherwise have to.
+
+### Messages from peers are checked
+
+Anything arriving from the network was written by someone else, who may be
+running an older build, a newer build, or trying to break things. Malformed
+messages are dropped, not thrown, because a bad message is an expected event on
+a public network. A batch of changes containing one malformed change is refused
+whole — accepting the good half would apply a change with no usable id, which
+could then be applied over and over.
+
+### Introductions
+
+Two browsers cannot call each other directly, so `server/signal` relays the
+connection details they need to find each other. It sees nothing else, stores
+nothing, and is trusted by neither peer. Once connected, changes travel directly
+and the server could be switched off without either side noticing.
+
+Rooms are named by a **hash** of the document id, so the server can tell that two
+people want the same room without learning which document it is.
+
+The newcomer makes the WebRTC offer, because the server tells an arriving peer
+who is already present. If both offered at once the handshake would collapse —
+WebRTC calls that a signalling collision.
+
+---
+
+## 12. The editor
+
+Two problems stand between a correct merge algorithm and an editor anyone would
+use. Neither is solved by the algorithm, and both are pure logic, so both are
+tested in Node rather than discovered by hand in a browser.
+
+### Turning a text box into changes
+
+A text box hands over its whole contents after every keystroke. The document
+needs the opposite: the smallest description of what altered.
+
+`diff()` matches the identical text at the start, then at the end, and whatever
+is left in the middle is the change.
+
+Replacing the whole document instead would still *look* right on one machine.
+It would also delete and re-insert every letter, so two people typing in the
+same paragraph would obliterate each other, every cursor would jump, and the
+change log would grow without bound. There is a test asserting that adding two
+letters produces exactly two changes.
+
+One trap, with a test of its own: `"aa"` becoming `"aaa"` matches two characters
+at the start *and* two at the end of a three-character string. Without a guard
+the two ranges overlap and the removed count goes negative.
+
+### Keeping the cursor still
+
+A cursor cannot be stored as a number. Someone typing earlier in the document
+shifts every number after it, and the cursor appears to jump — the single most
+irritating bug in collaborative editors.
+
+So a cursor is stored as **the id of the letter it sits after**. That letter is
+the same letter no matter what anyone types elsewhere. `anchorAt(index)` and
+`indexAfter(anchor)` convert between the two.
+
+Two details that are easy to get wrong:
+
+- A **deleted** letter still works as an anchor. If someone else removes the
+  letter your cursor sat after, the cursor belongs where that letter was, not at
+  the start of the document.
+- An **unknown** anchor resolves to the end. It means a cursor referring to
+  letters that have not arrived yet; the end is wrong but harmless, while the
+  start would look like the document had scrolled itself.
+
+### Presence is not part of the document
+
+Who is here and where their cursor is travels as a fifth message type, `who`,
+and never touches the document. It is not saved, not merged and not replayed.
+Storing it in the document would mean a cursor position from last Tuesday
+syncing forever.
+
+It is capped at 4 KB, because a channel nothing else checks is otherwise a way
+to push bulk data at everyone in the room.
+
+### Two tabs are two devices
+
+The bug that only a browser could have found.
+
+Two tabs of one browser share one IndexedDB. Both opened it, both adopted the
+stored device id, and so **they became the same device**. Their change ids
+collided, each discarded the other's edits as duplicates it already had, and the
+two tabs disagreed permanently while every status indicator said they were in
+sync.
+
+Two tabs are two replicas and need two identities. The tab's id now lives in
+`sessionStorage`, which is per tab and survives a reload — exactly the lifetime
+wanted. They still share a store, which is fine: changes are globally unique and
+merge.
+
+This also changed how a document is loaded. It is now built by **merging** the
+saved state rather than loading it, because loading adopts whichever device
+wrote the snapshot — right for one device, wrong for the second tab, whose own
+identity has to survive.
+
+---
+
+## 13. How this is tested
 
 | Test | What it proves |
 |---|---|
@@ -276,6 +476,12 @@ replaying its entire history.
 | `convergence.test.js` | The real proof: hundreds of random runs where replicas edit apart and then receive everything in different random orders |
 | `storage.test.js` | Reload, crash, write ordering, write failure, compacting, and state merge |
 | `storage-sql`, `storage-idb` | The same shared kit, run against SQLite on disk and against IndexedDB |
+| `sync/session.test.js` | Handshakes, relaying, reconnecting, and refusing malformed messages |
+| `sync/unreliable.test.js` | Loss, duplication, reordering and partitions, all seeded and replayable |
+| `signal/signal.test.js` | The introduction service, over real sockets |
+| `core/editing.test.js` | Diffing and cursor anchoring, including 2000 random diff pairs |
+| `sync/presence.test.js` | Presence arriving, expiring, and never reaching the document |
+| `tools/two-tabs.js` | The whole thing, in two real browsers |
 
 Every run prints its seed. Replay a failure with:
 
@@ -285,15 +491,27 @@ SEED=12345 npm test
 
 ### The test suite has teeth
 
-A test that cannot fail is worthless. The sibling sort was deliberately replaced
-with arrival order — the exact bug the tie-break rule prevents — and 9 tests
-failed, including all 5 convergence tests. Then it was put back.
+A test that cannot fail is worthless, so each of these was deliberately broken
+again to check the suite noticed:
 
-Worth repeating after any change to `text.js`.
+| Bug reintroduced | Result |
+|---|---|
+| Sibling sort by arrival order | 9 tests fail, including all 5 convergence tests |
+| One-way handshake (no hello reply) | 3 sync tests fail |
+| Counters absorbing other devices' numbers | 1 test fails |
+| Two tabs sharing one device id | 1 test fails, and the browser test disagrees on text |
+
+The last one is the interesting result. Only its own regression test caught it,
+and the network tests did not — because the flaw is symmetric: both sides
+under-report their versions identically, so the mistakes cancel out and sync
+looks healthy. A bug that hides from end-to-end tests is exactly the kind worth
+a unit test of its own.
+
+Worth repeating after any change to `text.js`, `id.js` or `session.js`.
 
 ---
 
-## 12. What is known to be missing
+## 14. What is known to be missing
 
 Written down honestly, because a limitation you know about is a plan and one you
 have hidden is a trap.
@@ -305,7 +523,11 @@ have hidden is a trap.
 | **Compacting is manual** | Nothing decides when to compact yet. It needs a trigger, such as a change count or an age | Week 10 |
 | **Reading order is rebuilt after each change** | Cached, so a burst costs one walk — but it is still O(document) per edit and will need a proper index | Performance week |
 | **No encryption yet** | Changes travel as plain data | Week 11 |
-| **No network yet** | `syncTo` works in memory only | Week 7 |
+| **The WebRTC transport has no unit tests** | `src/webrtc.js` cannot run in Node. It is now covered end to end by `tools/two-tabs.js`, which drives two real browsers, but not by the ordinary suite | Stands |
+| **Remote cursors are not drawn** | Their positions arrive and are held; a plain `<textarea>` cannot paint another person's caret. Needs a rendered editor rather than a text box | Later |
+| **Plain text only** | No formatting, and the field and tag types are not yet used by the interface | Later |
+| **No relay fallback** | A minority of strict networks — symmetric NAT, some corporate firewalls — cannot connect directly at all. The honest answer is a TURN relay, which is not built | Later |
+
 | **IndexedDB is tested against a stand-in** | `fake-indexeddb` exercises the real transaction flow, but not a real browser | Week 9, with the web app |
 
 The first one is the interesting one, and it is a deliberate trade. Convergence was

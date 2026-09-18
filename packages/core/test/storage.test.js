@@ -274,6 +274,60 @@ test('a fresh device can be built from another device\'s state alone', async () 
   assert.equal(a.toString(), '> a long document');
 });
 
+test('two replicas sharing one store keep separate identities', async () => {
+  // Two browser tabs share one IndexedDB. When both adopted the stored device
+  // id they became the same device: their change ids collided, each threw the
+  // other's edits away as duplicates, and the tabs disagreed forever while
+  // appearing to sync. Two tabs are two replicas.
+  const store = new MemoryStore('shared');
+
+  const tabOne = await open(store, { site: 'tab-one' });
+  const tabTwo = await open(store, { site: 'tab-two' });
+  assert.notEqual(tabOne.doc.site, tabTwo.doc.site);
+
+  tabOne.doc.insert(0, 'AAA');
+  tabTwo.doc.insert(0, 'BBB');
+  tabOne.doc.syncTo(tabTwo.doc);
+  tabTwo.doc.syncTo(tabOne.doc);
+
+  assert.equal(tabOne.doc.toString(), tabTwo.doc.toString(), 'the tabs agree');
+  assert.ok(tabOne.doc.toString().includes('AAA'), 'the first tab kept its work');
+  assert.ok(tabOne.doc.toString().includes('BBB'), 'and so did the second');
+});
+
+test('a reopened document keeps its identity and resumes its counter', async () => {
+  // The single-device case must not regress: reopening is still the same
+  // device, and its numbering has to continue rather than restart.
+  const store = new MemoryStore('aaaa');
+  const first = await open(store);
+  first.doc.insert(0, 'abc');
+  await first.saved.close();
+
+  const second = await open(store);
+  assert.equal(second.doc.site, first.doc.site);
+
+  const fresh = second.doc.insert(3, 'd');
+  const known = new Set((await store.read()).ops.map((op) => op.id));
+  assert.equal(known.has(fresh[0].id), false, 'the new id is not a reused one');
+});
+
+test('a tab keeps its own identity even when loading a snapshot', async () => {
+  // Loading a snapshot adopts whichever device wrote it, which is right for
+  // one device and wrong for a second tab reading the same store.
+  const store = new MemoryStore('shared');
+  const writer = await open(store, { site: 'writer' });
+  writer.doc.insert(0, 'from the writer');
+  await writer.saved.compact(); // now the store holds state, not changes
+
+  const reader = await open(store, { site: 'reader' });
+  assert.equal(reader.doc.site, 'reader', 'identity survived the snapshot');
+  assert.equal(reader.doc.toString(), 'from the writer');
+
+  reader.doc.insert(0, 'X');
+  reader.doc.syncTo(writer.doc);
+  assert.equal(writer.doc.toString(), reader.doc.toString());
+});
+
 // The in-memory store is the reference implementation: if a new adapter passes
 // the same kit, it is correct.
 storeContract('MemoryStore', () => {

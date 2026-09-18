@@ -58,6 +58,13 @@ export class OpLog {
       entry = { upto: 0, ahead: new Set() };
       this.seen.set(site, entry);
     }
+
+    // Counting gaps has to start from the trim point, not from zero. After
+    // compacting, this device's next change is numbered just above what was
+    // trimmed, so measuring from zero would see a hole that is not there and
+    // the summary would never move past it.
+    entry.upto = Math.max(entry.upto, this.trimmed[site] ?? 0);
+
     if (counter === entry.upto + 1) {
       entry.upto = counter;
       while (entry.ahead.delete(entry.upto + 1)) entry.upto += 1;
@@ -127,6 +134,13 @@ export class OpLog {
   absorb(theirs) {
     for (const [site, upto] of Object.entries(theirs)) {
       if (upto > (this.trimmed[site] ?? 0)) this.trimmed[site] = upto;
+
+      // Changes held ahead of a gap may now be contiguous with the new trim
+      // point, so let the summary move up over them.
+      const entry = this.seen.get(site);
+      if (!entry) continue;
+      entry.upto = Math.max(entry.upto, this.trimmed[site]);
+      while (entry.ahead.delete(entry.upto + 1)) entry.upto += 1;
     }
   }
 

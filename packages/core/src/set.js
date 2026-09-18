@@ -46,7 +46,7 @@ export class TagSet {
    */
   add(value) {
     /** @type {AddOp} */
-    const op = { type: 'add', id: this.clock.next(), value };
+    const op = { type: 'add', id: this.clock.next().id, value };
     this.apply(op);
     return [op];
   }
@@ -61,7 +61,7 @@ export class TagSet {
     /** @type {RemoveOp} */
     const op = {
       type: 'remove',
-      id: this.clock.next(),
+      id: this.clock.next().id,
       value,
       tags: [...entry.added],
     };
@@ -73,7 +73,7 @@ export class TagSet {
    * @param {SetOp} op
    */
   apply(op) {
-    this.clock.observe(op.id);
+    this.clock.witness(op.id);
     const entry = this.entry(op.value);
     if (op.type === 'add') {
       entry.added.add(op.id);

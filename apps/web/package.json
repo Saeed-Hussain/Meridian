@@ -1,0 +1,19 @@
+{
+  "name": "@meridian/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@meridian/core": "0.1.0",
+    "@meridian/storage-idb": "0.1.0",
+    "@meridian/sync": "0.1.0",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

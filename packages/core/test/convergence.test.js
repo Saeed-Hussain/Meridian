@@ -13,7 +13,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Doc } from '../src/index.js';
-import { random, shuffled, seedFromEnv } from './helpers/random.js';
+import { random, shuffled, seedFromEnv } from '../src/random.js';
 
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz ';
 

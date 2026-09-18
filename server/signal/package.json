@@ -1,0 +1,17 @@
+{
+  "name": "@meridian/signal",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Introduces peers to each other. Relays connection details only, never document text.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/serve.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

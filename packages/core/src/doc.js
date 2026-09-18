@@ -200,10 +200,11 @@ export class Doc {
     this.text.mergeState(state.text);
     this.fields.mergeState(state.fields);
     this.tags.mergeState(state.tags);
-    // Keep our own counter ahead of every id in their state, or we would hand
-    // out an id that already exists.
+    // Keep our own name counter ahead of anything of ours in their state, or
+    // we would hand out an id that already exists. Other devices' counters are
+    // deliberately not absorbed -- see the note in Clock about why.
     for (const [site, upto] of Object.entries(state.covers ?? {})) {
-      this.clock.observe(`${upto}@${site}`);
+      if (site === this.clock.site) this.clock.observe(`${upto}@${site}`);
     }
     this.log.absorb(state.covers ?? {});
     this.emit([]);

@@ -43,12 +43,29 @@ import { Doc } from './doc.js';
  * Open a document from a store, and keep it saved from then on.
  *
  * @param {Store} store
+ * @param {object} [options]
+ * @param {string} [options.site]
+ *   Use this device id instead of the store's own.
+ *
+ *   Needed because two browser tabs share one IndexedDB. Letting both adopt
+ *   the stored id made them the same device: their change ids collided, each
+ *   silently discarded the other's edits as a duplicate, and the two tabs
+ *   quietly disagreed forever. Two tabs are two replicas, so they need two
+ *   ids, even though they share a store.
+ *
  * @returns {Promise<{doc: Doc, saved: Persistence}>}
  */
-export async function open(store) {
-  const [site, { snapshot, ops }] = await Promise.all([store.site(), store.read()]);
+export async function open(store, options = {}) {
+  const [stored, { snapshot, ops }] = await Promise.all([store.site(), store.read()]);
+  const site = options.site ?? stored;
 
-  const doc = snapshot ? Doc.fromSnapshot(snapshot) : new Doc(site);
+  // Built by merging rather than by loading. Loading a snapshot would adopt
+  // whichever device wrote it -- which is right for a single device and wrong
+  // for the second tab, whose own id must survive. Merging keeps our identity
+  // and still recovers the clock, because the merge takes account of every id
+  // of ours in the state.
+  const doc = new Doc(site);
+  if (snapshot) doc.mergeState(snapshot);
   if (ops.length > 0) doc.receive(ops);
 
   return { doc, saved: new Persistence(doc, store) };

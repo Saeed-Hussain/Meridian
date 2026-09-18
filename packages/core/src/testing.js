@@ -11,6 +11,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { open } from './storage.js';
 
+export { random, shuffled, seedFromEnv } from './random.js';
+
 /**
  * Every store adapter must pass this. It is exported so the SQLite and
  * IndexedDB packages can run it against themselves rather than writing their

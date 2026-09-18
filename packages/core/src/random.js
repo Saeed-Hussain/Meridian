@@ -1,6 +1,11 @@
 /**
  * Seeded randomness for tests.
  *
+ * This sits in `src` rather than in a test folder because more than one package
+ * needs it: the core's convergence tests and the sync package's bad-network
+ * tests must both be replayable from a seed. It is reached through
+ * `@meridian/core/testing`.
+ *
  * `Math.random` cannot be used here. A test that fails once and then cannot be
  * made to fail again is not a test, it is a rumour. Every run prints its seed,
  * so a failure can be replayed exactly.

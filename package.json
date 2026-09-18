@@ -4,19 +4,23 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "server/*"
   ],
   "scripts": {
-    "test": "node --test \"packages/*/test/*.test.js\"",
-    "test:watch": "node --test --watch \"packages/*/test/*.test.js\"",
-    "typecheck": "tsc --noEmit -p jsconfig.json"
+    "test": "node --test \"packages/*/test/*.test.js\" \"server/*/test/*.test.js\"",
+    "test:watch": "node --test --watch \"packages/*/test/*.test.js\" \"server/*/test/*.test.js\"",
+    "typecheck": "tsc --noEmit -p jsconfig.json",
+    "signal": "node server/signal/src/serve.js"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
+    "@types/ws": "^8.18.1",
     "fake-indexeddb": "^6.2.5",
+    "puppeteer-core": "^25.11.0",
     "typescript": "^5.9.3"
   }
 }

@@ -7,6 +7,7 @@
  */
 
 export { Doc } from './doc.js';
+export { diff, applyText } from './diff.js';
 export { open, Persistence, MemoryStore } from './storage.js';
 export { Text } from './text.js';
 export { FieldMap } from './map.js';

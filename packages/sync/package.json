@@ -1,0 +1,15 @@
+{
+  "name": "@meridian/sync",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The sync protocol. Transport-agnostic: works over WebRTC, WebSocket or anything that carries strings.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./testing": "./test/helpers/channels.js",
+    "./webrtc": "./src/webrtc.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  }
+}

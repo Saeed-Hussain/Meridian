@@ -10,11 +10,22 @@ import { Doc, OpLog, compareIds, Clock, parseId } from '../src/index.js';
 
 test('ids from one device are unique and rising', () => {
   const clock = new Clock('aaaa');
-  const ids = Array.from({ length: 100 }, () => clock.next());
+  const ids = Array.from({ length: 100 }, () => clock.next().id);
   assert.equal(new Set(ids).size, 100);
   for (let i = 1; i < ids.length; i += 1) {
     assert.ok(compareIds(ids[i], ids[i - 1]) > 0, 'each id sorts after the last');
   }
+});
+
+test('a device numbers its own changes with no gaps', () => {
+  // Syncing sends "I hold everything from device X up to N", which is only
+  // meaningful if a device's own numbering is unbroken. Seeing another device's
+  // change must not push this one's counter forward.
+  const clock = new Clock('aaaa');
+  assert.equal(parseId(clock.next().id).counter, 1);
+  clock.witness('500@bbbb', 500);
+  assert.equal(parseId(clock.next().id).counter, 2, 'still the next number along');
+  assert.ok(clock.lamport > 500, 'but the ordering stamp did move');
 });
 
 test('ids order the same way whichever way round they are asked', () => {
@@ -31,10 +42,12 @@ test('ids order the same way whichever way round they are asked', () => {
   assert.ok(compareIds('10@aaaa', '2@aaaa') > 0);
 });
 
-test('a clock never reuses a counter it has seen', () => {
+test('a clock never reuses one of its own counters', () => {
+  // The case that matters is reloading a saved document: the counter has to
+  // resume past everything this device already issued.
   const clock = new Clock('aaaa', 0);
-  clock.observe('50@bbbb');
-  assert.ok(parseId(clock.next()).counter > 50);
+  clock.observe('50@aaaa');
+  assert.ok(parseId(clock.next().id).counter > 50);
 });
 
 test('rubbish is not accepted as an id', () => {
@@ -45,7 +58,7 @@ test('rubbish is not accepted as an id', () => {
 
 // ---------------------------------------------------------------------- fields
 
-test('the higher id wins a clash on one field', () => {
+test('the later writer wins a clash on one field', () => {
   const a = new Doc('aaaa');
   const b = new Doc('bbbb');
   a.setField('title', 'from a');

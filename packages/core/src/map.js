@@ -11,7 +11,7 @@
  * the same one.
  */
 
-import { compareIds } from './id.js';
+import { compareStamps } from './id.js';
 
 /** @typedef {import('./id.js').Id} Id */
 /** @typedef {import('./id.js').Clock} Clock */
@@ -22,6 +22,7 @@ import { compareIds } from './id.js';
  * @property {Id} id
  * @property {string} key
  * @property {any} value
+ * @property {number} l
  */
 
 export class FieldMap {
@@ -29,7 +30,7 @@ export class FieldMap {
   constructor(clock) {
     /** @type {Clock} */
     this.clock = clock;
-    /** @type {Map<string, {value: any, id: Id}>} */
+    /** @type {Map<string, {value: any, id: Id, l: number}>} */
     this.entries = new Map();
   }
 
@@ -39,8 +40,9 @@ export class FieldMap {
    * @returns {SetFieldOp[]}
    */
   set(key, value) {
+    const { id, l } = this.clock.next();
     /** @type {SetFieldOp} */
-    const op = { type: 'field', id: this.clock.next(), key, value };
+    const op = { type: 'field', id, key, value, l };
     this.apply(op);
     return [op];
   }
@@ -49,10 +51,14 @@ export class FieldMap {
    * @param {SetFieldOp} op
    */
   apply(op) {
-    this.clock.observe(op.id);
+    this.clock.witness(op.id, op.l);
     const current = this.entries.get(op.key);
-    if (!current || compareIds(op.id, current.id) > 0) {
-      this.entries.set(op.key, { value: op.value, id: op.id });
+    const incoming = op.l ?? 0;
+    // Whoever wrote last wins, where "last" means the higher stamp -- so a
+    // device that had seen the current value beats it, and two devices writing
+    // without seeing each other are separated by device id.
+    if (!current || compareStamps(incoming, op.id, current.l, current.id) > 0) {
+      this.entries.set(op.key, { value: op.value, id: op.id, l: incoming });
     }
   }
 
@@ -74,7 +80,7 @@ export class FieldMap {
 
   /** @returns {object} */
   toJSON() {
-    return { entries: [...this.entries].map(([k, e]) => [k, e.value, e.id]) };
+    return { entries: [...this.entries].map(([k, e]) => [k, e.value, e.id, e.l]) };
   }
 
   /**
@@ -84,8 +90,8 @@ export class FieldMap {
    * @param {any} json State from `toJSON`.
    */
   mergeState(json) {
-    for (const [key, value, id] of json.entries ?? []) {
-      this.apply({ type: 'field', id, key, value });
+    for (const [key, value, id, l] of json.entries ?? []) {
+      this.apply({ type: 'field', id, key, value, l: l ?? 0 });
     }
   }
 
@@ -96,8 +102,8 @@ export class FieldMap {
    */
   static fromJSON(clock, json) {
     const map = new FieldMap(clock);
-    for (const [key, value, id] of json.entries ?? []) {
-      map.entries.set(key, { value, id });
+    for (const [key, value, id, l] of json.entries ?? []) {
+      map.entries.set(key, { value, id, l: l ?? 0 });
     }
     return map;
   }
