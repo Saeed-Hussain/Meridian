@@ -13,17 +13,18 @@ peers to each other — it never sees what you write.
 
 ## Status
 
-**It works.** Weeks 1 to 9 done: two browsers edit the same document, straight
-through each other, and survive being disconnected.
+**It works.** Weeks 1 to 10 done: browsers edit the same document straight
+through each other, survive being disconnected, and can step back through
+everything that was typed.
 
-- 126 tests pass, including hundreds of random convergence runs per seed.
-- Nine more checks run in two real browsers, covering the whole stack.
+- 140 tests pass, including hundreds of random convergence runs per seed.
+- Two browser suites drive real Chrome windows over the whole stack.
 - Typecheck is clean under `strict`, from JSDoc comments — no TypeScript.
 - Zero dependencies in the core. Nothing to install to run its tests.
 - The sync protocol reconciles through 30% packet loss, reordering,
   duplication and network partitions — all seeded, so failures replay exactly.
 
-Next: offline history and a time slider (week 10), then the desktop app.
+Next: the desktop app (week 11), then performance and release.
 
 ## Try it
 
@@ -55,11 +56,12 @@ already in use, an earlier run is still going: `npx kill-port 8080`.
 ```bash
 npm test            # 126 tests, about three seconds
 npm run typecheck
-npm run two-tabs    # the whole thing, in two real browsers
+npm run two-tabs      # the whole thing, in two real browsers
+npm run four-windows  # four windows, two cut off and reconnected
 ```
 
-`two-tabs` needs the app and the signalling server already running, in their two
-terminals, as above.
+Both browser suites need the app and the signalling server already running, in
+their two terminals, as above.
 
 ## Documents
 
@@ -108,8 +110,21 @@ genuinely two devices:
 4. one goes offline, both keep editing, and they agree again on reconnect
 5. the text is still there after a reload
 
-It is the only test that exercises WebRTC, because `RTCPeerConnection` does not
-exist in Node.
+`npm run four-windows` goes further: four windows, two of them cut off, all four
+typing, then everyone back together. Four rather than two on purpose — two peers
+can agree by luck, because with one connection there is only one order things
+can arrive in.
+
+These are the only tests that exercise WebRTC, because `RTCPeerConnection` does
+not exist in Node.
+
+One known flaw, printed by that test rather than hidden: when several windows
+type into the *same spot* at the *same instant*, words often come out
+interleaved — in that extreme case, all four survive whole in only about a third
+of runs. Everyone still agrees and nothing is ever lost — both are required
+by the test. The merge algorithm is not the cause; it handles the same scenario
+perfectly in Node. It is a timing race between the text box and the document,
+and it is written up in the design notes.
 
 ## The one thing that matters
 

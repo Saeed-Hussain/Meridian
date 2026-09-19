@@ -12,8 +12,8 @@
  * It needs the signalling server and the web app running:
  *
  *   npm run signal
- *   npm run --workspace @meridian/web dev
- *   node tools/two-tabs.js
+ *   npm run web
+ *   npm run two-tabs
  *
  * This is the only test that exercises the WebRTC transport, because
  * RTCPeerConnection does not exist in Node. Everything below the transport is
@@ -22,7 +22,7 @@
 
 import puppeteer from 'puppeteer-core';
 
-const BASE = process.env.BASE ?? 'http://localhost:3100';
+const BASE = process.env.BASE ?? 'http://localhost:3000';
 const CHROME =
   process.env.CHROME ??
   'C:/Program Files/Google/Chrome/Application/chrome.exe';

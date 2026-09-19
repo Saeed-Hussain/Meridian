@@ -65,7 +65,12 @@ export async function open(store, options = {}) {
   // and still recovers the clock, because the merge takes account of every id
   // of ours in the state.
   const doc = new Doc(site);
-  if (snapshot) doc.mergeState(snapshot);
+  if (snapshot) {
+    doc.mergeState(snapshot);
+    // The saved state is also where history starts, since the changes that
+    // built it were dropped when it was written.
+    doc.base = snapshot;
+  }
   if (ops.length > 0) doc.receive(ops);
 
   return { doc, saved: new Persistence(doc, store) };

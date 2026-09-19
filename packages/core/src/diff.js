@@ -76,17 +76,23 @@ export function diff(before, after) {
  * Deleting happens before inserting, because the insert position is expressed
  * in terms of the text after the removal.
  *
+ * The change is returned as well as the operations, because the caller needs
+ * to know *where* the edit happened. An editor works out where to leave the
+ * cursor from that, rather than from the text box's own caret: the box and the
+ * document disagree for a moment after every edit, and a caret read inside
+ * that window points at the wrong letter.
+ *
  * @param {import('./doc.js').Doc} doc
  * @param {string} after
- * @returns {import('./oplog.js').Op[]} The changes made.
+ * @returns {{ops: import('./oplog.js').Op[], change: Change | null}}
  */
 export function applyText(doc, after) {
   const change = diff(doc.toString(), after);
-  if (!change) return [];
+  if (!change) return { ops: [], change: null };
 
   /** @type {import('./oplog.js').Op[]} */
   const ops = [];
   if (change.removed > 0) ops.push(...doc.delete(change.at, change.removed));
   if (change.added) ops.push(...doc.insert(change.at, change.added));
-  return ops;
+  return { ops, change };
 }

@@ -23,10 +23,21 @@ export default function DocumentPage({ params }) {
     if (name) localStorage.setItem('meridian-name', name);
   }, [name]);
 
-  const { text, edit, status, peers, online, saved, boxRef, announce } = useDocument({
-    id,
-    name: name || 'Guest',
-  });
+  const {
+    edit,
+    status,
+    peers,
+    online,
+    saved,
+    synced,
+    boxRef,
+    announce,
+    steps,
+    viewing,
+    view,
+  } = useDocument({ id, name: name || 'Guest' });
+
+  const reading = viewing !== null;
 
   return (
     <main className="editor">
@@ -52,13 +63,7 @@ export default function DocumentPage({ params }) {
         </div>
 
         <div className="state">
-          <span>
-            {!online
-              ? 'offline — still saving'
-              : peers.length > 0
-                ? `${peers.length} other ${peers.length === 1 ? 'person' : 'people'}`
-                : status}
-          </span>
+          <span>{connectionLabel({ online, peers, synced, status })}</span>
           <span className={saved ? 'saved' : 'saving'}>
             {saved ? 'saved' : 'saving…'}
           </span>
@@ -68,22 +73,74 @@ export default function DocumentPage({ params }) {
       <textarea
         ref={boxRef}
         className="paper"
-        value={text}
-        onChange={(event) => edit(event.target.value)}
+        data-reading={reading}
+        readOnly={reading}
+        defaultValue=""
+
+        onChange={(event) =>
+          edit(event.target.value, event.target.selectionStart, event.target.selectionEnd)
+        }
+        // Editing sets the cursor itself, from the change. These cover the
+        // cases where the user moves it without editing.
+        //
+        // Narrowing this further to arrow keys and clicks was tried and made
+        // things measurably worse, so it stays broad.
         onSelect={announce}
-        onKeyUp={announce}
         onClick={announce}
         placeholder="Start typing. Close the tab, turn off your internet, come back — it is all still here."
         spellCheck={false}
       />
 
+      {/* Nothing to scrub through until something has been typed. */}
+      {steps > 0 && (
+        <div className="history">
+          <input
+            type="range"
+            min={0}
+            max={steps}
+            value={viewing ?? steps}
+            aria-label="Step back through the document's history"
+            onChange={(event) => {
+              const step = Number(event.target.value);
+              view(step >= steps ? null : step);
+            }}
+          />
+          {reading ? (
+            <button type="button" className="now" onClick={() => view(null)}>
+              Back to now
+            </button>
+          ) : (
+            <span className="hint">
+              drag to see earlier versions · {steps} changes
+            </span>
+          )}
+        </div>
+      )}
+
       <footer>
         <p>
-          Share this page&apos;s address to invite someone. The id
-          <code>{id}</code> is hashed before it reaches the server, so the
-          introduction service never learns which document this is.
+          {reading
+            ? 'This is how the document looked. Editing is off while you are looking back.'
+            : 'Share this page’s address to invite someone. The id is hashed before it reaches the server, so the introduction service never learns which document this is.'}
         </p>
       </footer>
     </main>
   );
+}
+
+/**
+ * What to say about the connection.
+ *
+ * Deliberately never claims more than is known. "Synced" means every peer has
+ * confirmed it holds everything this device holds — not merely that a message
+ * was sent — and with nobody connected there is nothing to be synced with.
+ *
+ * @param {{online: boolean, peers: any[], synced: boolean, status: string}} state
+ * @returns {string}
+ */
+function connectionLabel({ online, peers, synced, status }) {
+  if (!online) return 'offline — still saving';
+  if (peers.length === 0) return status;
+  const who = `${peers.length} other ${peers.length === 1 ? 'person' : 'people'}`;
+  return synced ? `${who} · synced` : `${who} · syncing…`;
 }

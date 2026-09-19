@@ -7,7 +7,7 @@
  * syncable.
  */
 
-import { Clock } from './id.js';
+import { Clock, compareStamps } from './id.js';
 import { Text } from './text.js';
 import { FieldMap } from './map.js';
 import { TagSet } from './set.js';
@@ -33,6 +33,16 @@ export class Doc {
     this.log = new OpLog();
     /** @type {Set<(ops: Op[]) => void>} */
     this.listeners = new Set();
+    /**
+     * The state history starts from, once older changes have been trimmed.
+     *
+     * Without it, stepping back to the beginning after compacting showed an
+     * empty document -- which is not what the document was, only what is left
+     * when there are no changes to replay. The floor of history is the trim
+     * point, and this is what it looked like.
+     * @type {object | null}
+     */
+    this.base = null;
   }
 
   /** @returns {string} */
@@ -210,6 +220,58 @@ export class Doc {
     this.emit([]);
   }
 
+  // ------------------------------------------------------------------- history
+
+  /**
+   * Every change held, in the order they logically happened.
+   *
+   * Sorted by stamp, then by device to break a tie. This is a real order over
+   * changes that were genuinely made at the same time on different machines,
+   * and any order would do there so long as every device picks the same one.
+   *
+   * The useful property: a change always sorts after everything its writer had
+   * already seen. So the first N changes of this list can be applied on their
+   * own -- a letter never arrives before the letter it was typed after.
+   *
+   * @returns {Op[]}
+   */
+  historyOrder() {
+    return [...this.log.ops].sort((a, b) =>
+      compareStamps(a.l ?? 0, a.id, b.l ?? 0, b.id),
+    );
+  }
+
+  /** How many steps back the history goes. @returns {number} */
+  get historyLength() {
+    return this.log.ops.length;
+  }
+
+  /**
+   * The document as it was after the first `steps` changes.
+   *
+   * Rebuilt from scratch rather than undone, because undoing needs an inverse
+   * for every kind of change and getting one of them wrong corrupts the real
+   * document. Replaying cannot: it never touches this document at all.
+   *
+   * The cost is that it is O(changes) every time, which is fine for dragging a
+   * slider over a document and would need an index for a long one.
+   *
+   * History only reaches back as far as the change log. After compacting,
+   * everything before the trim point is a single starting state -- there is no
+   * way to see inside it, because those changes no longer exist anywhere.
+   *
+   * @param {number} steps
+   * @returns {Doc}
+   */
+  at(steps) {
+    const past = new Doc(this.clock.site);
+    // Start from the trim point when there is one, so the earliest view is
+    // what the document actually was rather than nothing at all.
+    if (this.base) past.mergeState(this.base);
+    past.receive(this.historyOrder().slice(0, Math.max(0, steps)));
+    return past;
+  }
+
   // ------------------------------------------------------------------- watching
 
   /**
@@ -291,6 +353,7 @@ export class Doc {
    */
   compact() {
     const state = this.snapshot();
+    this.base = state;
     return { state, dropped: this.log.trim() };
   }
 

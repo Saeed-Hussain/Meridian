@@ -21,12 +21,14 @@
  * @property {'add'} type
  * @property {Id} id Doubles as the tag.
  * @property {string} value
+ * @property {number} l
  *
  * @typedef {object} RemoveOp
  * @property {'remove'} type
  * @property {Id} id
  * @property {string} value
  * @property {Id[]} tags The tags that were visible when the remove was made.
+ * @property {number} l
  *
  * @typedef {AddOp | RemoveOp} SetOp
  */
@@ -45,8 +47,9 @@ export class TagSet {
    * @returns {AddOp[]}
    */
   add(value) {
+    const { id, l } = this.clock.next();
     /** @type {AddOp} */
-    const op = { type: 'add', id: this.clock.next().id, value };
+    const op = { type: 'add', id, value, l };
     this.apply(op);
     return [op];
   }
@@ -58,13 +61,9 @@ export class TagSet {
   remove(value) {
     const entry = this.elements.get(value);
     if (!entry || entry.added.size === 0) return [];
+    const { id, l } = this.clock.next();
     /** @type {RemoveOp} */
-    const op = {
-      type: 'remove',
-      id: this.clock.next().id,
-      value,
-      tags: [...entry.added],
-    };
+    const op = { type: 'remove', id, value, tags: [...entry.added], l };
     this.apply(op);
     return [op];
   }
@@ -73,7 +72,7 @@ export class TagSet {
    * @param {SetOp} op
    */
   apply(op) {
-    this.clock.witness(op.id);
+    this.clock.witness(op.id, op.l);
     const entry = this.entry(op.value);
     if (op.type === 'add') {
       entry.added.add(op.id);

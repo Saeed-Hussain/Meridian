@@ -76,6 +76,16 @@ test('a diff always rebuilds the new text', () => {
 
 // ----------------------------------------------------------- applying to a doc
 
+test('applyText says where the edit happened', () => {
+  // The editor needs this to place the cursor, because the text box cannot be
+  // trusted for it straight after an edit.
+  const doc = new Doc('aaaa');
+  applyText(doc, 'hello');
+  const { change } = applyText(doc, 'hello world');
+  assert.deepEqual(change, { at: 5, removed: 0, added: ' world' });
+  assert.equal(applyText(doc, 'hello world').change, null, 'no change, nothing to report');
+});
+
 test('applying text to a document', () => {
   const doc = new Doc('aaaa');
   applyText(doc, 'hello');

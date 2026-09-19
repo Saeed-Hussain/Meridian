@@ -7,7 +7,7 @@
 
 import puppeteer from 'puppeteer-core';
 
-const BASE = process.env.BASE ?? 'http://localhost:3100';
+const BASE = process.env.BASE ?? 'http://localhost:3000';
 const CHROME =
   process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 

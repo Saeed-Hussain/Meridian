@@ -224,3 +224,39 @@ code {
   padding: 0.05rem 0.35rem;
   margin: 0 0.35rem;
 }
+
+/* ---------------------------------------------------------------- history */
+
+.history {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.history input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.now {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* Looking at the past is read-only, and should look it rather than leaving
+   someone to discover it by typing and having nothing happen. */
+.paper[data-reading='true'] {
+  background: var(--page);
+  color: var(--muted);
+  border-style: dashed;
+  cursor: default;
+}

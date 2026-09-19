@@ -74,6 +74,7 @@ import { compareStamps } from './id.js';
  * @property {'delete'} type
  * @property {Id} id This change's own id, needed so sync can track it.
  * @property {Id} target The letter being hidden.
+ * @property {number} l Its place in the order, for replaying history.
  *
  * @typedef {InsertOp | DeleteOp} TextOp
  */
@@ -178,8 +179,9 @@ export class Text {
     /** @type {DeleteOp[]} */
     const ops = [];
     for (const letter of visible.slice(index, index + count)) {
+      const { id, l } = this.clock.next();
       /** @type {DeleteOp} */
-      const op = { type: 'delete', id: this.clock.next().id, target: letter.id };
+      const op = { type: 'delete', id, target: letter.id, l };
       this.applyDelete(op);
       ops.push(op);
     }
@@ -278,7 +280,7 @@ export class Text {
    * @private
    */
   applyDelete(op) {
-    this.clock.witness(op.id);
+    this.clock.witness(op.id, op.l);
     const letter = this.letters.get(op.target);
     if (!letter) {
       this.waitingDeletes.add(op.target);

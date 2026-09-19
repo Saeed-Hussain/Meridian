@@ -71,11 +71,26 @@ function tabSite(id) {
  * @returns {object}
  */
 export function useDocument({ id, name, signalUrl }) {
-  const [text, setText] = useState('');
   const [status, setStatus] = useState('opening');
   const [peers, setPeers] = useState([]);
   const [online, setOnline] = useState(true);
   const [saved, setSaved] = useState(true);
+  const [synced, setSynced] = useState(true);
+  const [steps, setSteps] = useState(0);
+  /**
+   * Which point in history is being looked at, or null for the present.
+   *
+   * While this is set the editor is read-only. Editing a past version would
+   * mean deciding what to do with everything typed since, and there is no good
+   * answer -- so looking and editing are kept apart.
+   */
+  const [viewing, setViewing] = useState(null);
+  /**
+   * The same value as `viewing`, readable from callbacks that must not wait
+   * for a re-render — chiefly the edit handler, which has to refuse edits the
+   * instant a past version is on screen.
+   */
+  const viewingRef = useRef(null);
 
   const nameRef = useRef(name);
   useEffect(() => {
@@ -109,7 +124,7 @@ export function useDocument({ id, name, signalUrl }) {
 
       docRef.current = doc;
       storeRef.current = persistence;
-      setText(doc.toString());
+      showInBox(doc.toString());
       setStatus('offline');
 
       const net = new Network(doc, {
@@ -121,7 +136,13 @@ export function useDocument({ id, name, signalUrl }) {
       // cursor back is the whole reason anchors exist: a remote edit above the
       // cursor shifts every position below it.
       const stopWatching = doc.onChange(() => {
-        setText(doc.toString());
+        // Write straight to the box, in the same turn. Going through React
+        // state put a render between a change and the text being visible, and
+        // a keystroke arriving inside that gap was inserted at the wrong
+        // place. The document is the source of truth; the box is a view of it
+        // that is kept exactly in step.
+        showInBox(doc.toString());
+        setSteps(doc.historyLength);
         setSaved(false);
         persistence.flush().then(
           () => alive && setSaved(true),
@@ -152,8 +173,15 @@ export function useDocument({ id, name, signalUrl }) {
         onState: (state) => alive && setStatus(state),
       });
 
+      setSteps(doc.historyLength);
+
       // Repair runs on a timer because a lost handshake has no other cure.
-      timer = setInterval(() => net.tick(), TICK);
+      // The same tick reports whether every peer has confirmed it is up to
+      // date, which is the only honest basis for saying "synced".
+      timer = setInterval(() => {
+        net.tick();
+        setSynced(net.synced);
+      }, TICK);
 
       // A handle for driving the app from outside: the browser test uses it to
       // cut the connection and put it back, which nothing else can do. Turning
@@ -206,51 +234,91 @@ export function useDocument({ id, name, signalUrl }) {
    *
    * @param {string} next
    */
-  const edit = useCallback((next) => {
+  const edit = useCallback((next, caretStart, caretEnd) => {
     const doc = docRef.current;
-    if (!doc) return;
+    if (!doc || viewingRef.current !== null) return;
 
-    const box = boxRef.current;
-    if (box) rememberCursor(doc, box);
+    const { change } = applyText(doc, next);
 
-    applyText(doc, next);
-    announce();
+    // The cursor goes just after whatever was typed, worked out from the
+    // change itself rather than from the text box's caret.
+    //
+    // Reading the caret here was a real bug with a surprising symptom. The box
+    // and the document disagree for a moment after every edit, and a caret
+    // read inside that window points into text that no longer matches -- so
+    // the anchor landed on somebody else's letter. The next keystroke then
+    // attached there, and two people typing in one place produced interleaved
+    // words instead of two whole ones. It came and went with timing, which is
+    // exactly what made it hard to see.
+    //
+    // The change says where the edit was and how long it was. That is true
+    // whatever the box is doing.
+    if (change) {
+      const end = doc.text.anchorAt(change.at + [...change.added].length);
+      anchorRef.current = { start: end, end };
+    }
+    tellPeers(doc);
   }, []);
 
-  /** Tell the other people where this cursor is now. */
-  const announce = useCallback(() => {
-    const doc = docRef.current;
+  /**
+   * Send the current cursor, without touching it.
+   *
+   * @param {any} doc
+   */
+  function tellPeers(doc) {
     const net = netRef.current;
-    const box = boxRef.current;
-    if (!doc || !net || !box) return;
-
-    rememberCursor(doc, box);
+    if (!net) return;
     net.announce({
       name: nameRef.current,
       colour: COLOURS[hash(doc.site) % COLOURS.length],
       anchor: anchorRef.current.start,
       head: anchorRef.current.end,
     });
-  }, [name]);
+  }
 
   /**
-   * Put the cursor back where it belongs after a redraw.
+   * The cursor moved by itself — a click, an arrow key, a selection.
    *
-   * React resets a controlled text box's selection to the end whenever its
-   * value changes, so without this every keystroke — and every remote edit —
-   * would throw the cursor to the bottom of the document.
+   * Here the text box and the document agree, so reading the caret is safe.
+   * After an edit they do not agree yet, which is why `edit` sets the anchor
+   * itself rather than calling this.
    */
-  useEffect(() => {
+  const announce = useCallback(() => {
     const doc = docRef.current;
     const box = boxRef.current;
-    if (!doc || !box || document.activeElement !== box) return;
+    if (!doc || !box) return;
 
-    const start = doc.text.indexAfter(anchorRef.current.start);
-    const end = doc.text.indexAfter(anchorRef.current.end);
-    if (box.selectionStart !== start || box.selectionEnd !== end) {
-      box.setSelectionRange(start, end);
-    }
-  }, [text]);
+    rememberCursor(doc, box);
+    tellPeers(doc);
+  }, []);
+
+  /**
+   * Show text in the box, keeping this person's cursor where it belongs.
+   *
+   * Setting a text box's value moves the caret to the end, so it has to be put
+   * back. The cursor is held as an anchor — the letter it sits after — which
+   * is why somebody typing higher up the document does not drag it along.
+   *
+   * @param {string} value
+   */
+  function showInBox(value) {
+    const doc = docRef.current;
+    const box = boxRef.current;
+    if (!box || box.value === value) return;
+
+    const start = doc ? doc.text.indexAfter(anchorRef.current.start) : value.length;
+    const end = doc ? doc.text.indexAfter(anchorRef.current.end) : value.length;
+
+    box.value = value;
+
+    // Always put the caret back, focused or not. Skipping it for an unfocused
+    // box left the DOM caret wherever setting the value had dropped it, and
+    // the next thing to read the caret then recorded a cursor that was never
+    // there -- so the following keystroke attached to the wrong letter. The
+    // DOM caret and the stored anchor have to agree at all times, because
+    // either one may be read next.
+    box.setSelectionRange(start, end);
+  }
 
   // Offline and online are worth showing honestly: the app keeps working
   // either way, which is the entire promise, and the user should be able to
@@ -271,13 +339,62 @@ export function useDocument({ id, name, signalUrl }) {
    * @param {HTMLTextAreaElement} box
    */
   function rememberCursor(doc, box) {
+    // Only trust the caret when the box and the document agree.
+    //
+    // They disagree for a moment after every edit, local or remote: the box
+    // holds one version while the document holds another. A position read in
+    // that window refers to text that no longer matches, so it silently lands
+    // on a different letter -- and since `keyup` fires in exactly that window,
+    // it was overwriting the correct anchor after every keystroke. The visible
+    // result was two people typing in one place producing interleaved words
+    // instead of two whole ones.
+    if (box.value !== doc.toString()) return;
+
     anchorRef.current = {
       start: doc.text.anchorAt(box.selectionStart ?? 0),
       end: doc.text.anchorAt(box.selectionEnd ?? 0),
     };
   }
 
-  return { text, edit, status, peers, online, saved, boxRef, announce, doc: docRef };
+  /**
+   * Look at the document as it was, or return to the present with null.
+   *
+   * The past version is built as a separate document and thrown away, so
+   * nothing here can damage the real one.
+   *
+   * @param {number | null} step
+   */
+  const view = useCallback((step) => {
+    const doc = docRef.current;
+    if (!doc) return;
+
+    if (step === null) {
+      viewingRef.current = null;
+      setViewing(null);
+      showInBox(doc.toString());
+      return;
+    }
+    viewingRef.current = step;
+    setViewing(step);
+    // Past versions are built as separate documents and thrown away, so
+    // nothing here can disturb the real one.
+    showInBox(doc.at(step).toString());
+  }, []);
+
+  return {
+    edit,
+    status,
+    peers,
+    online,
+    saved,
+    synced,
+    boxRef,
+    announce,
+    doc: docRef,
+    steps,
+    viewing,
+    view,
+  };
 }
 
 /**

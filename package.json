@@ -15,7 +15,8 @@
     "web": "npm run dev --workspace @meridian/web",
     "build:web": "npm run build --workspace @meridian/web",
     "two-tabs": "node tools/two-tabs.js",
-    "shot": "node tools/shot.js"
+    "shot": "node tools/shot.js",
+    "four-windows": "node tools/four-windows.js"
   },
   "engines": {
     "node": ">=22"

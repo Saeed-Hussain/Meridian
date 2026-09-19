@@ -4,7 +4,7 @@ This is the written version of the algorithm in `packages/core`. It is the
 document to read before changing anything in `text.js`.
 
 **Written:** 17 September 2026
-**Covers:** weeks 1 to 9 of the work plan
+**Covers:** weeks 1 to 10 of the work plan
 
 ---
 
@@ -467,7 +467,81 @@ identity has to survive.
 
 ---
 
-## 13. How this is tested
+## 13. History
+
+Every change carries a stamp, so there is a single order everyone agrees on:
+sorted by stamp, then by device to break a tie. A change always sorts after
+everything its writer had already seen, which gives the property the slider
+needs — **the first N changes can be applied on their own**. A letter never
+arrives before the letter it was typed after, so every point in history is a
+document that makes sense rather than a half-built one.
+
+`doc.at(n)` builds that past version as a **separate document**. It is replayed,
+never undone. Undoing needs an inverse for every kind of change, and one wrong
+inverse corrupts the live document; replaying cannot touch it at all. There is a
+test that walks every step of a history and checks the real document is
+unchanged afterwards.
+
+The cost is O(changes) each time the slider moves, which is fine for a document
+and would need an index for a long one.
+
+### Where history stops
+
+After compacting there is nothing left to replay, because those changes no
+longer exist anywhere. The earliest view is the trim point.
+
+That needed fixing rather than explaining: at first the slider showed an *empty*
+document there, which is not what the document was, only what is left when there
+are no changes. The state saved at the trim point is now kept as the floor of
+history, and restored on reload because it is the same state the store already
+holds.
+
+---
+
+## 14. The text box is not the document
+
+The editor keeps the document as the source of truth and writes to the text box
+directly, rather than driving the box from React state. Every version of the
+bug below came from the same root: **the box and the document disagree for a
+moment after every edit, and anything read in that window is wrong.**
+
+It took four attempts to corner, so the sequence is worth recording:
+
+| What was wrong | Symptom |
+|---|---|
+| The cursor was read before the change was applied — a new position looked up in old text | Cursor drifted onto another person's letter |
+| The caret was restored *after* paint, leaving a gap a keystroke could land in | Interleaving that came and went with typing speed |
+| `keyup` re-read the caret right after an edit had already set it | The correct cursor was overwritten by a stale one |
+| The caret was only restored when the box had focus | With several windows open, the DOM caret and the stored cursor drifted apart |
+
+What finally made it mostly right: the cursor is now worked out from **the change
+itself** — where the edit was, and how long it was — which is true regardless of
+what the box is doing. React's render is out of the typing path entirely.
+
+### What is still wrong
+
+Four windows typing into the same spot of an empty document at the same instant
+still interleave, and often: across recent runs, all four words survived whole
+in perhaps a third of them. The rest kept two of the four intact.
+
+Worth being precise about what that is and is not:
+
+- The merge algorithm is **not** at fault. `interleave.test.js` runs the same
+  scenario in Node — four typists, syncing after every single character — and
+  every word comes out whole, every time.
+- Nothing is ever lost, and every window always agrees. The browser test
+  requires both of those and fails if either breaks.
+- What is left is a race between the text box and the document that sometimes
+  attaches a letter to the wrong neighbour. It shreds words; it does not damage
+  the document.
+
+The browser test prints `words kept whole: n/4` rather than failing on it, so
+the number stays visible and a change for better or worse is obvious. Making it
+a hard failure would only invite the test to be weakened later.
+
+---
+
+## 15. How this is tested
 
 | Test | What it proves |
 |---|---|
@@ -481,7 +555,10 @@ identity has to survive.
 | `signal/signal.test.js` | The introduction service, over real sockets |
 | `core/editing.test.js` | Diffing and cursor anchoring, including 2000 random diff pairs |
 | `sync/presence.test.js` | Presence arriving, expiring, and never reaching the document |
+| `core/history.test.js` | Stepping back, the floor after compacting, and not disturbing the present |
+| `core/interleave.test.js` | Several people typing in one spot — a quality test, not a correctness one |
 | `tools/two-tabs.js` | The whole thing, in two real browsers |
+| `tools/four-windows.js` | Four windows, two of them cut off and reconnected |
 
 Every run prints its seed. Replay a failure with:
 
@@ -511,7 +588,7 @@ Worth repeating after any change to `text.js`, `id.js` or `session.js`.
 
 ---
 
-## 14. What is known to be missing
+## 16. What is known to be missing
 
 Written down honestly, because a limitation you know about is a plan and one you
 have hidden is a trap.
@@ -526,6 +603,8 @@ have hidden is a trap.
 | **The WebRTC transport has no unit tests** | `src/webrtc.js` cannot run in Node. It is now covered end to end by `tools/two-tabs.js`, which drives two real browsers, but not by the ordinary suite | Stands |
 | **Remote cursors are not drawn** | Their positions arrive and are held; a plain `<textarea>` cannot paint another person's caret. Needs a rendered editor rather than a text box | Later |
 | **Plain text only** | No formatting, and the field and tag types are not yet used by the interface | Later |
+| **Words interleave under a browser race** | Often, when several windows type into the same spot at the same instant. The algorithm is not the cause — see section 14 | Open |
+| **Stepping through history is O(changes)** | Each move of the slider replays from the start. Fine for a document, not for a long one | Later |
 | **No relay fallback** | A minority of strict networks — symmetric NAT, some corporate firewalls — cannot connect directly at all. The honest answer is a TURN relay, which is not built | Later |
 
 | **IndexedDB is tested against a stand-in** | `fake-indexeddb` exercises the real transaction flow, but not a real browser | Week 9, with the web app |
