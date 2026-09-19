@@ -19,7 +19,9 @@
     "four-windows": "node tools/four-windows.js",
     "desktop": "bash apps/desktop/build.sh && npm start --workspace @meridian/desktop",
     "desktop:dist": "bash apps/desktop/build.sh && npm run dist --workspace @meridian/desktop",
-    "desktop:check": "bash apps/desktop/build.sh && node apps/desktop/src/launch.cjs --probe"
+    "desktop:check": "bash apps/desktop/build.sh && node apps/desktop/src/launch.cjs --probe",
+    "bench": "node tools/bench.js",
+    "packaged-check": "node tools/packaged-check.js"
   },
   "engines": {
     "node": ">=22"

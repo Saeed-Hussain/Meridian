@@ -10,5 +10,6 @@ build/
 
 # The desktop app's copy of the exported interface, rebuilt by its build script.
 apps/desktop/web/
+apps/desktop/vendor/
 # electron-builder output.
 apps/desktop/dist/

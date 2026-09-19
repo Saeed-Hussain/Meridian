@@ -4,7 +4,7 @@ This is the written version of the algorithm in `packages/core`. It is the
 document to read before changing anything in `text.js`.
 
 **Written:** 17 September 2026
-**Covers:** weeks 1 to 11 of the work plan
+**Covers:** weeks 1 to 12 of the work plan
 
 ---
 
@@ -619,9 +619,114 @@ encryption depends on — is not available to it.
 into the document through the real interface, reopens it, and checks the text
 came back from the SQLite file. A running process proves nothing on its own.
 
+### Testing the source is not testing the product
+
+That check runs against the source, and the source is not what people install.
+The difference produced the worst bug of the project, precisely because nothing
+went red.
+
+The SQLite adapter was a workspace dependency — a symlink to a folder outside
+the application. The packaged app is a sealed archive of whatever the build
+lists, and a symlink to somewhere else is not in it. So the installer contained
+an app that started perfectly and failed the instant anybody opened a document,
+while all 155 tests, both browser suites and the desktop check stayed green.
+Every one of them ran against the source, where the symlink resolves.
+
+Two things came out of it. The adapter is now **copied in** at build time, the
+same way the interface is, rather than imported by package name — it has no
+dependencies of its own, so a copy is all of it. And `npm run packaged-check`
+drives the **built binary** through a debugging port: open a document, type,
+reload, read it back. It is the only check that looks at the thing people would
+actually install.
+
 ---
 
-## 17. How this is tested
+## 17. Speed
+
+### The measurement that matters
+
+Not how long it takes to build a large document — nobody waits for that — but
+**what one keystroke costs on a document that is already large**. A person
+typing wants the next character before they notice it is missing, and the
+budget for that is one screen refresh, about 16ms.
+
+At 100,000 characters, on an ordinary laptop:
+
+| | median | worst |
+|---|---|---|
+| Type a character at the end | 0.003 ms | 0.1 ms |
+| Type a character in the middle | 0.81 ms | 2.8 ms |
+| Delete a character in the middle | 0.95 ms | 3.0 ms |
+| **A keystroke, all the way through** | **5.6 ms** | 17.8 ms |
+| Work out where the cursor is | 0.001 ms | 0.2 ms |
+| Read the whole document as text | 22.6 ms | — |
+| Save it | 197 ms | — |
+| Load it back | 536 ms | — |
+
+"All the way through" means what the editor really does: take the new text,
+work out what changed, apply it, and render the result back. The render is
+included on purpose — leaving it out would move the cost to the next keystroke
+rather than remove it.
+
+Run it with `npm run bench`, or `SIZE=200000 npm run bench`.
+
+### What made it fast
+
+The first version rebuilt the whole reading order from a tree on every change.
+At 5,000 characters a keystroke already cost 1.3ms and building cost 528µs per
+character — both growing with the document, so 100,000 characters would have
+meant about 26ms per keystroke and minutes to type.
+
+Two changes, in order of how much they were worth:
+
+**The letters are a chain, not a tree.** Each letter links to the one before
+and after it, so placing a new one is a couple of pointer writes instead of
+rebuilding an order. The ordering rule became simpler at the same time: start
+just after the letter you were typed after, walk forward past everything whose
+stamp beats yours, stop.
+
+That short rule is exactly equivalent to the old depth-first walk, and it works
+because of one invariant — *a letter's stamp is always higher than that of the
+letter it was typed after*, since whoever typed it had seen that letter. So
+everything typed after a rival also outranks the newcomer, and walking past the
+rival skips its whole run at once. It cannot overshoot either: the first letter
+past that run belongs to an earlier place in the document, so its stamp is
+lower and the walk stops.
+
+**The last position looked up is remembered.** Finding the letter at a position
+means counting along the chain. People type in one place and then a little
+further along, so remembering where we were turns nearly every lookup into a
+step or two. Typing at the end went from 1.3ms to 0.003ms.
+
+Result: building a document went from 528µs to 3µs per character, a factor of
+about 170.
+
+### What is still slow, and why
+
+The 5.6ms keystroke is almost entirely **rendering the document to a string**.
+That is O(n) and there is no way around it with an ordinary text box, which
+wants the whole text as one value. Improving it needs a rope — the text held in
+chunks so an edit rewrites one chunk rather than the lot — and that is a real
+piece of work, not a tweak.
+
+It is under one frame at 100,000 characters, and occasionally over at the worst
+case. Loading a long document takes half a second, which is once per open.
+
+### Size
+
+| | |
+|---|---|
+| Saved, with full history | 11.8 MB — 124 bytes per character |
+| Saved after compacting | 4.0 MB — 66% smaller |
+| Memory in use | 90 MB |
+
+124 bytes per character is the price of every change being separately named and
+orderable. Compacting throws away the history and keeps the state, which is
+where most of it goes.
+
+---
+
+## 18. How this is tested
 
 | Test | What it proves |
 |---|---|
@@ -660,6 +765,7 @@ again to check the suite noticed:
 | One-way handshake (no hello reply) | 3 sync tests fail |
 | Counters absorbing other devices' numbers | 1 test fails |
 | Two tabs sharing one device id | 1 test fails, and the browser test disagrees on text |
+| Letters not walking past their rivals when placed | 21 tests fail |
 
 The last one is the interesting result. Only its own regression test caught it,
 and the network tests did not — because the flaw is symmetric: both sides
@@ -671,7 +777,7 @@ Worth repeating after any change to `text.js`, `id.js` or `session.js`.
 
 ---
 
-## 18. What is known to be missing
+## 19. What is known to be missing
 
 Written down honestly, because a limitation you know about is a plan and one you
 have hidden is a trap.
@@ -688,6 +794,10 @@ have hidden is a trap.
 | **Plain text only** | No formatting, and the field and tag types are not yet used by the interface | Later |
 | **Words interleave under a browser race** | Often, when several windows type into the same spot at the same instant. The algorithm is not the cause — see section 14 | Open |
 | **Stepping through history is O(changes)** | Each move of the slider replays from the start. Fine for a document, not for a long one | Later |
+| **Rendering is O(document)** | The 5.6ms keystroke at 100,000 characters is almost all of it. Needs a rope to improve | Later |
+| **Loading a long document takes half a second** | Every change is replayed on open. Compacting helps; an index would help more | Later |
+| **The installer is not signed** | Windows will warn about an unknown publisher. Signing needs a certificate | Open |
+| **Only Windows is built** | The configuration targets NSIS. macOS and Linux need their own targets and testing | Later |
 | **No relay fallback** | A minority of strict networks — symmetric NAT, some corporate firewalls — cannot connect directly at all. The honest answer is a TURN relay, which is not built | Later |
 | **Encryption does not authenticate** | Anyone with the link can read and write. There is no notion of who a peer is | Later |
 | **No installer is produced yet** | `electron-builder` is configured but a signed installer has not been built or tested | Week 12 |

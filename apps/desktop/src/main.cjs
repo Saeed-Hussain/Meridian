@@ -136,7 +136,11 @@ async function storeFor(id) {
   const existing = stores.get(id);
   if (existing) return existing;
 
-  const { openSqlite } = await import('@meridian/storage-sql');
+  // By path, not by package name. The packaged application cannot see the
+  // workspace it was built in, so a bare import resolves in development and
+  // vanishes in the installer.
+  const adapter = pathToFileURL(path.join(__dirname, '..', 'vendor', 'storage-sql.mjs'));
+  const { openSqlite } = await import(adapter.toString());
   // Under the per-user application data directory, which is where an
   // application may write without asking.
   const file = path.join(app.getPath('userData'), `doc-${safe(id)}.db`);

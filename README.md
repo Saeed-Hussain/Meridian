@@ -13,9 +13,10 @@ peers to each other — it never sees what you write.
 
 ## Status
 
-**It works.** Weeks 1 to 11 done: browsers edit the same document straight
-through each other, survive being disconnected, step back through everything
-that was typed — and it runs as a desktop application with its own database.
+**It works, and it is fast.** All twelve weeks done: browsers edit the same
+document straight through each other, survive being disconnected, step back
+through everything that was typed, and it runs as a desktop application with
+its own database.
 
 - 155 tests pass, including hundreds of random convergence runs per seed.
 - Two browser suites drive real Chrome windows over the whole stack.
@@ -26,7 +27,8 @@ that was typed — and it runs as a desktop application with its own database.
 - The sync protocol reconciles through 30% packet loss, reordering,
   duplication and network partitions — all seeded, so failures replay exactly.
 
-Next: performance and release (week 12).
+At 100,000 characters a keystroke costs **5.6 ms** — inside one screen refresh.
+The numbers, including the unflattering ones, are below.
 
 ## Try it
 
@@ -56,11 +58,13 @@ already in use, an earlier run is still going: `npx kill-port 8080`.
 ## Checking it
 
 ```bash
-npm test            # 126 tests, about three seconds
+npm test            # 155 tests, about four seconds
 npm run typecheck
 npm run two-tabs      # the whole thing, in two real browsers
 npm run four-windows  # four windows, two cut off and reconnected
 npm run desktop:check # the desktop app: type, reopen, read it back from SQLite
+npm run bench         # how fast, at 100,000 characters
+npm run packaged-check # the built application, not the source
 ```
 
 Both browser suites need the app and the signalling server already running, in
@@ -75,6 +79,20 @@ npm run desktop
 Builds the interface and opens it as an application. Changes go to a SQLite file
 in your user data directory rather than to browser storage, so it can be copied,
 backed up, and survives clearing browser data.
+
+## An installer
+
+```bash
+npm run desktop:dist
+```
+
+Produces `apps/desktop/dist/Meridian Setup 0.1.0.exe`, about 106 MB.
+
+It is **not signed**, so Windows will warn about an unknown publisher — signing
+needs a certificate. `npm run packaged-check` drives the built application
+itself through a debugging port, rather than the source, and is worth running
+before trusting an installer: the two are not the same thing, which is a lesson
+this project learned the hard way.
 
 ## Documents
 
@@ -103,10 +121,10 @@ your viewer first — Windows will not let the script overwrite an open file.
 packages/core          the merge algorithm, plain JavaScript, no deps   BUILT
 packages/storage-sql   saves to SQLite, for desktop and Node           BUILT
 packages/storage-idb   saves to IndexedDB, for the browser             BUILT
+packages/storage-bridge saves through the desktop app's own process   BUILT
 packages/sync          the sync protocol, plus the WebRTC transport    BUILT
 server/signal          introduces peers to each other                  BUILT
 apps/web               the editor, in Next.js                          BUILT
-packages/storage-bridge  saves through the desktop app's own process    BUILT
 apps/desktop           the desktop application, in Electron            BUILT
 ```
 
@@ -140,6 +158,35 @@ by the test. The merge algorithm is not the cause; it handles the same scenario
 perfectly in Node. It is a timing race between the text box and the document,
 and it is written up in the design notes.
 
+## Speed
+
+At 100,000 characters, on an ordinary laptop:
+
+| | median | worst |
+|---|---|---|
+| Type a character at the end | 0.003 ms | 0.1 ms |
+| Type a character in the middle | 0.81 ms | 2.8 ms |
+| **A keystroke, all the way through** | **5.6 ms** | 17.8 ms |
+| Work out where the cursor is | 0.001 ms | 0.2 ms |
+| Load a saved document | 536 ms | — |
+
+"All the way through" is what the editor really does: take the new text, work
+out what changed, apply it, render the result. The render is counted on
+purpose — leaving it out moves the cost to the next keystroke rather than
+removing it.
+
+The first version rebuilt the whole reading order on every change: 528 µs per
+character, growing with the document. Holding the letters as a chain and
+remembering the last position looked up brought that to 3 µs — about 170 times
+faster — and took a keystroke at the end from 1.3 ms to 0.003 ms.
+
+What is left is honest: the 5.6 ms is almost entirely rendering the document to
+a string, which is O(n) and needs a rope to improve. Loading a long document
+takes half a second. Saved with full history it is 124 bytes per character,
+which compacting cuts by two thirds.
+
+`npm run bench` produces all of it.
+
 ## The one thing that matters
 
 Week 4 of the plan ends with a test that makes thousands of random edits, applies
@@ -147,7 +194,8 @@ them in every order, and checks that every copy of the document ends up identica
 
 **That test passes.** The hard part is solved; what follows is ordinary work.
 
-It has also been checked for teeth. Replacing the sibling sort with arrival order —
-the exact bug the tie-break rule prevents — fails 9 tests, including all 5
-convergence tests. A suite that cannot fail proves nothing, so it is worth
-re-running that experiment after any change to the algorithm.
+It has also been checked for teeth, and rechecked after the algorithm was
+rewritten for speed. Stopping a letter from walking past its rivals when it is
+placed — the exact mistake the ordering rule exists to prevent — fails 21
+tests. A suite that cannot fail proves nothing, so it is worth repeating that
+experiment after any change to `packages/core/src/text.js`.
