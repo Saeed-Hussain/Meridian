@@ -50,7 +50,7 @@ function check(what, actual, expected) {
  * @param {import('puppeteer-core').Page} page
  * @returns {Promise<string>}
  */
-const read = (page) => page.$eval('.paper', (box) => box.value);
+const read = (page) => page.$eval('[data-editor]', (box) => box.value);
 
 /**
  * Wait until every window agrees, or give up and report what they said.
@@ -97,7 +97,7 @@ try {
   const deadline = Date.now() + 25000;
   while (Date.now() < deadline && !met) {
     const counts = await Promise.all(
-      pages.map((page) => page.$$eval('.chip', (chips) => chips.length)),
+      pages.map((page) => page.$$eval('[data-peer]', (faces) => faces.length)),
     );
     met = counts.every((count) => count === 3);
     if (!met) await new Promise((resolve) => setTimeout(resolve, 250));
@@ -112,7 +112,7 @@ try {
   // Everyone types, including the two that cannot reach anybody.
   await Promise.all(
     pages.map(async (page, i) => {
-      await page.focus('.paper');
+      await page.focus('[data-editor]');
       await page.keyboard.type(`${WORDS[i]} `, { delay: DELAY });
     }),
   );
@@ -160,7 +160,7 @@ try {
 
   // The slider shows the past without disturbing the present.
   const live = await read(pages[0]);
-  await pages[0].$eval('.history input', (range) => {
+  await pages[0].$eval('[data-scrub]', (range) => {
     const input = /** @type {HTMLInputElement} */ (range);
     const setter = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
@@ -173,9 +173,9 @@ try {
 
   const past = await read(pages[0]);
   check('the slider shows an earlier version', past.length < live.length, true);
-  check('and it is read-only there', await pages[0].$eval('.paper', (b) => b.readOnly), true);
+  check('and it is read-only there', await pages[0].$eval('[data-editor]', (b) => b.readOnly), true);
 
-  await pages[0].click('.now');
+  await pages[0].click('[data-now]');
   await new Promise((resolve) => setTimeout(resolve, 400));
   check('back to now restores the document', await read(pages[0]), live);
   check(

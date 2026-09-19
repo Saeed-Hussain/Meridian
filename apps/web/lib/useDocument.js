@@ -17,7 +17,22 @@ import { joinRoom, roomFor } from '@meridian/sync/webrtc';
 /** How often to greet peers that have not confirmed they are up to date. */
 const TICK = 3000;
 
-const COLOURS = ['#e0544e', '#2d7ff9', '#37a06a', '#b45bd6', '#d98324', '#0f9bb5'];
+/**
+ * Shades of grey for people's markers.
+ *
+ * The interface has no colour in it, so people are told apart by their initial
+ * and by a shade. That is a tighter constraint than a palette of hues and a
+ * better one: it reads the same for anyone who cannot distinguish colours.
+ *
+ * These are lightness percentages, not colours, because the right grey depends
+ * on the theme. A dark circle is correct on a white page and invisible on a
+ * black one, so the stylesheet flips the value for dark mode. Handing it a hex
+ * here would bake in an answer that is wrong half the time.
+ *
+ * The range stops at 46 so that white text on the lightest circle still has
+ * enough contrast to read.
+ */
+const SHADES = [12, 19, 26, 33, 40, 46];
 
 /**
  * Where the introduction service is.
@@ -159,7 +174,7 @@ export function useDocument({ id, name, signalUrl }) {
       // something, which reads as "nobody else is here" when somebody is.
       net.announce({
         name: nameRef.current,
-        colour: COLOURS[hash(doc.site) % COLOURS.length],
+        shade: SHADES[hash(doc.site) % SHADES.length],
         anchor: null,
       });
 
@@ -270,7 +285,7 @@ export function useDocument({ id, name, signalUrl }) {
     if (!net) return;
     net.announce({
       name: nameRef.current,
-      colour: COLOURS[hash(doc.site) % COLOURS.length],
+      shade: SHADES[hash(doc.site) % SHADES.length],
       anchor: anchorRef.current.start,
       head: anchorRef.current.end,
     });

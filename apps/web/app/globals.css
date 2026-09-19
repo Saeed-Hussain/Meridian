@@ -1,262 +1,507 @@
 /*
- * Plain CSS, no framework. The app is two screens, and a styling dependency
- * would be larger than everything it styles.
+ * Meridian — black and white only.
+ *
+ * No colour anywhere. Every distinction is made with weight, spacing, contrast
+ * or a border, which is a harder constraint and a more durable one: it holds up
+ * in both themes, in print, and for anyone who cannot separate two hues.
+ *
+ * Both themes are the same design with the ink and the paper exchanged, so
+ * there is one set of rules rather than two that drift apart.
  */
 
 :root {
-  --ink: #16191d;
-  --muted: #6b7480;
-  --line: #e0e4e9;
+  /* Light: ink on paper. */
   --paper: #ffffff;
-  --page: #f6f7f9;
-  --accent: #1f4e79;
-  --good: #2f8f5b;
+  --raised: #ffffff;
+  --sunken: #f6f6f6;
+  --ink: #0a0a0a;
+  --ink-soft: #52525b;
+  --ink-faint: #8b8b93;
+  --line: #e4e4e7;
+  --line-strong: #c8c8cd;
+  --inverse: #ffffff;
+
+  --radius: 6px;
+  --gutter: 1.25rem;
+
+  /* Type scale. Four sizes is enough; more only invites inconsistency. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 2.25rem;
+
+  --sans: ui-sans-serif, -apple-system, 'Segoe UI', Inter, system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #e8eaed;
-    --muted: #949ba6;
-    --line: #2a2f36;
-    --paper: #16191d;
-    --page: #101216;
-    --accent: #79b8f3;
-    --good: #5bc48a;
-  }
+:root[data-theme='dark'] {
+  /* Dark: paper on ink. Not pure black — a hair of lift stops the panels
+     from disappearing into the window behind them. */
+  --paper: #0b0b0c;
+  --raised: #121214;
+  --sunken: #18181b;
+  --ink: #fafafa;
+  --ink-soft: #a1a1aa;
+  --ink-faint: #71717a;
+  --line: #27272a;
+  --line-strong: #3f3f46;
+  --inverse: #0b0b0c;
+
+  color-scheme: dark;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--page);
+  background: var(--paper);
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
-  line-height: 1.6;
+  font-family: var(--sans);
+  font-size: var(--text-base);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* ------------------------------------------------------------------- home */
+::selection {
+  background: var(--ink);
+  color: var(--inverse);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------------ controls */
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.95rem;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  background: var(--ink);
+  color: var(--inverse);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.button:hover {
+  opacity: 0.82;
+}
+
+.button.quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.button.quiet:hover {
+  background: var(--sunken);
+  opacity: 1;
+}
+
+.field {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  font-size: var(--text-sm);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: border-color 120ms ease;
+}
+
+.field:hover {
+  border-color: var(--line-strong);
+}
+
+.field::placeholder {
+  color: var(--ink-faint);
+}
+
+/* --------------------------------------------------------------- theme switch */
+
+.theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.theme:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.theme svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ------------------------------------------------------------------ home page */
 
 .home {
-  max-width: 34rem;
+  max-width: 38rem;
   margin: 0 auto;
-  padding: 4rem 1.25rem;
+  padding: clamp(3rem, 12vh, 7rem) var(--gutter) 4rem;
 }
 
-.home h1 {
-  font-size: 2.5rem;
-  margin: 0 0 0.25rem;
-  letter-spacing: -0.02em;
-  color: var(--accent);
+.home-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.wordmark {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  margin: 0;
 }
 
 .lede {
-  font-size: 1.15rem;
-  margin: 0 0 1.5rem;
+  font-size: var(--text-lg);
+  line-height: 1.5;
+  letter-spacing: -0.012em;
+  margin: 0 0 1.75rem;
+  max-width: 30rem;
 }
 
-.detail {
-  color: var(--muted);
-  font-size: 0.95rem;
+.home p.detail {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  max-width: 32rem;
+  margin: 0 0 0.85rem;
 }
 
-.actions {
-  margin: 2rem 0 1rem;
+.home-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 2.25rem 0 0;
 }
 
-button {
-  font: inherit;
-  font-weight: 600;
-  padding: 0.6rem 1.1rem;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-}
-
-button:hover {
-  filter: brightness(1.08);
-}
-
-.open {
+.open-form {
   display: flex;
   gap: 0.5rem;
+  margin-top: 2.25rem;
+  padding-top: 1.75rem;
   border-top: 1px solid var(--line);
-  padding-top: 1.5rem;
 }
 
-.open input {
+.open-form .field {
   flex: 1;
 }
 
-input {
-  font: inherit;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--paper);
+/* A short, evenly spaced list of what the thing actually does. */
+.facts {
+  list-style: none;
+  margin: 2.5rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.facts li {
+  display: flex;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.facts b {
+  flex: none;
+  width: 10.5rem;
+  font-weight: 500;
   color: var(--ink);
 }
 
-.open button {
-  background: transparent;
-  color: var(--accent);
-}
-
-/* ----------------------------------------------------------------- editor */
+/* --------------------------------------------------------------------- editor */
 
 .editor {
-  max-width: 48rem;
-  margin: 0 auto;
-  padding: 1.25rem;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-height: 100dvh;
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: 0 var(--gutter);
 }
 
-.editor header {
+.bar {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding-bottom: 0.75rem;
+  gap: 0.75rem;
+  padding: 0.85rem 0;
   border-bottom: 1px solid var(--line);
 }
 
-.who {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* Green when the browser reports a connection, grey when it does not. Not a
-   claim about whether peers are reachable -- only what the browser knows. */
-.dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.dot[data-online='true'] {
-  background: var(--good);
-}
-
-.name {
-  width: 9rem;
+.bar .name {
+  /* Sized to the text rather than to a guess, so the name sits next to the
+     other people rather than across a gap from them. */
+  width: 7rem;
   padding: 0.3rem 0.5rem;
+  margin-right: -0.25rem;
+  font-size: var(--text-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  transition: border-color 120ms ease;
 }
 
-.people {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+.bar .name:hover,
+.bar .name:focus {
+  border-color: var(--line);
+}
+
+.spacer {
   flex: 1;
 }
 
-.chip {
-  font-size: 0.8rem;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  color: #fff;
-  background: var(--chip, var(--muted));
-}
-
-.alone,
-.state {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.state {
+/* Presence, in greyscale.
+   People are told apart by initial and by a shade of grey rather than by hue,
+   which keeps the whole interface monochrome and still works for anyone who
+   cannot distinguish colours. */
+.people {
   display: flex;
-  gap: 0.75rem;
-  margin-left: auto;
+  align-items: center;
 }
 
-.saved {
-  color: var(--good);
+.face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  margin-left: -6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--paper);
+  background: hsl(0 0% calc(var(--shade, 30) * 1%));
+  color: #ffffff;
+  cursor: default;
 }
 
-.saving {
-  color: var(--muted);
+/* The same person keeps the same position on the scale, flipped, so a marker
+   that is a dark circle on a white page becomes a light one on a black page
+   rather than disappearing into it. */
+:root[data-theme='dark'] .face {
+  background: hsl(0 0% calc((100 - var(--shade, 30)) * 1%));
+  color: #0b0b0c;
+}
+
+.face:first-child {
+  margin-left: 0;
+}
+
+.alone {
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A ring, filled when connected and hollow when not. Shape, not colour. */
+.pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-faint);
+  background: transparent;
+}
+
+.pip[data-on='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.divider {
+  color: var(--line-strong);
 }
 
 .paper {
   flex: 1;
-  min-height: 60vh;
-  margin: 1rem 0;
-  padding: 1.5rem;
-  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 0.95rem;
-  line-height: 1.7;
+  width: 100%;
+  min-height: 55vh;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  line-height: 1.85;
   color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
   resize: none;
+  tab-size: 2;
 }
 
 .paper:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: none;
 }
 
-.editor footer {
-  font-size: 0.8rem;
-  color: var(--muted);
-  border-top: 1px solid var(--line);
-  padding-top: 0.75rem;
+.paper::placeholder {
+  color: var(--ink-faint);
 }
 
-.editor footer p {
-  margin: 0;
+/* Reading an earlier version: dimmed and visibly not editable. */
+.paper[data-reading='true'] {
+  color: var(--ink-soft);
 }
 
-code {
-  font-family: ui-monospace, Consolas, monospace;
-  background: var(--page);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 0.05rem 0.35rem;
-  margin: 0 0.35rem;
-}
-
-/* ---------------------------------------------------------------- history */
+/* -------------------------------------------------------------------- history */
 
 .history {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding-bottom: 0.75rem;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
 }
 
-.history input[type='range'] {
+.scrub {
   flex: 1;
-  accent-color: var(--accent);
+  height: 18px;
+  margin: 0;
+  background: transparent;
   cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-.hint {
-  font-size: 0.8rem;
-  color: var(--muted);
+.scrub::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--line-strong);
+  border-radius: 1px;
+}
+
+.scrub::-moz-range-track {
+  height: 2px;
+  background: var(--line-strong);
+  border-radius: 1px;
+}
+
+.scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.scrub::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.meta {
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-.now {
-  padding: 0.3rem 0.7rem;
-  font-size: 0.8rem;
-  white-space: nowrap;
+.foot {
+  padding: 0.85rem 0 1.5rem;
+  border-top: 1px solid var(--line);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  line-height: 1.6;
 }
 
-/* Looking at the past is read-only, and should look it rather than leaving
-   someone to discover it by typing and having nothing happen. */
-.paper[data-reading='true'] {
-  background: var(--page);
-  color: var(--muted);
-  border-style: dashed;
-  cursor: default;
+.foot p {
+  margin: 0;
+  max-width: 46rem;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------------- small */
+
+@media (max-width: 40rem) {
+  .bar {
+    flex-wrap: wrap;
+  }
+
+  .status {
+    width: 100%;
+    order: 3;
+    padding-top: 0.15rem;
+  }
+
+  .facts li {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .facts b {
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }

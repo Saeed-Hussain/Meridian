@@ -30,6 +30,19 @@ try {
   // profile talking to itself through a shared database.
   const one = await (await browser.createBrowserContext()).newPage();
   const two = await (await browser.createBrowserContext()).newPage();
+
+  // Pick the theme rather than inheriting whatever the machine prefers, so the
+  // picture in the README is the same every time it is regenerated.
+  const theme = process.env.THEME ?? 'dark';
+  for (const page of [one, two]) {
+    await page.evaluateOnNewDocument((value) => {
+      try {
+        localStorage.setItem('meridian-theme', value);
+      } catch {
+        // No storage, no remembered theme. The page still works.
+      }
+    }, theme);
+  }
   await one.setViewport({ width: 900, height: 620 });
   await two.setViewport({ width: 900, height: 620 });
 
@@ -55,11 +68,11 @@ try {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
-  await one.focus('.paper');
+  await one.focus('[data-editor]');
   await type(one, 'Meeting notes\n\nBoth of us are typing into this document at the same time.\n');
   await new Promise((resolve) => setTimeout(resolve, 900));
 
-  await two.focus('.paper');
+  await two.focus('[data-editor]');
   await type(two, '\nThis line was written in the other window. It arrived here without\ntouching a server: the change went straight from one browser to the other.\n');
   await new Promise((resolve) => setTimeout(resolve, 1500));
 

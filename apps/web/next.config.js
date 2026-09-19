@@ -7,6 +7,10 @@
  */
 const config = {
   transpilePackages: ['@meridian/core', '@meridian/sync', '@meridian/storage-idb'],
+
+  // The floating dev badge sits on top of the footer and lands in every
+  // screenshot taken from a dev server. Nothing is lost by hiding it.
+  devIndicators: false,
 };
 
 export default config;

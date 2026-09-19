@@ -62,7 +62,7 @@ async function until(page, done, ms = 15000) {
   const deadline = Date.now() + ms;
   let last = '';
   while (Date.now() < deadline) {
-    last = await page.$eval('.paper', (box) => box.value);
+    last = await page.$eval('[data-editor]', (box) => box.value);
     if (done(last)) return last;
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
@@ -74,7 +74,7 @@ async function until(page, done, ms = 15000) {
  * @param {string} text
  */
 async function type(page, text) {
-  await page.focus('.paper');
+  await page.focus('[data-editor]');
   await page.keyboard.type(text, { delay: 12 });
 }
 
@@ -115,7 +115,7 @@ try {
   ).then(async () => {
     const deadline = Date.now() + 15000;
     while (Date.now() < deadline) {
-      const peers = await one.$$eval('.chip', (chips) => chips.length);
+      const peers = await one.$$eval('[data-peer]', (faces) => faces.length);
       if (peers > 0) return true;
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
@@ -152,8 +152,8 @@ try {
 
   await type(one, ' [while apart: one]');
   await type(two, ' [while apart: two]');
-  const apartOne = await one.$eval('.paper', (box) => box.value);
-  const apartTwo = await two.$eval('.paper', (box) => box.value);
+  const apartOne = await one.$eval('[data-editor]', (box) => box.value);
+  const apartTwo = await two.$eval('[data-editor]', (box) => box.value);
   check('they really did diverge', apartOne !== apartTwo, true);
   check('the offline tab kept working', apartTwo.includes('apart: two'), true);
 

@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import { useDocument } from '../../../lib/useDocument.js';
+import { ThemeToggle } from '../../theme.jsx';
 
 /**
  * The editor.
@@ -41,42 +42,52 @@ export default function DocumentPage({ params }) {
 
   return (
     <main className="editor">
-      <header>
-        <div className="who">
-          <span className="dot" data-online={online} />
-          <input
-            className="name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            aria-label="Your name"
-            maxLength={24}
-          />
-        </div>
+      <header className="bar">
+        <input
+          className="name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          aria-label="Your name"
+          maxLength={24}
+          spellCheck={false}
+        />
 
         <div className="people">
           {peers.map((peer) => (
-            <span key={peer.id} className="chip" style={{ '--chip': peer.colour }}>
-              {peer.name ?? 'someone'}
+            <span
+              key={peer.id}
+              className="face"
+              data-peer
+              style={{ '--shade': peer.shade }}
+              title={peer.name ?? 'someone'}
+            >
+              {initial(peer.name)}
             </span>
           ))}
-          {peers.length === 0 && <span className="alone">nobody else here yet</span>}
+          {peers.length === 0 && <span className="alone">only you</span>}
         </div>
 
-        <div className="state">
+        <span className="spacer" />
+
+        <div className="status">
+          <span className="pip" data-on={online} aria-hidden="true" />
           <span>{connectionLabel({ online, peers, synced, status })}</span>
-          <span className={saved ? 'saved' : 'saving'}>
-            {saved ? 'saved' : 'saving…'}
+          <span className="divider" aria-hidden="true">
+            /
           </span>
+          <span>{saved ? 'saved' : 'saving'}</span>
         </div>
+
+        <ThemeToggle />
       </header>
 
       <textarea
         ref={boxRef}
         className="paper"
+        data-editor
         data-reading={reading}
         readOnly={reading}
         defaultValue=""
-
         onChange={(event) =>
           edit(event.target.value, event.target.selectionStart, event.target.selectionEnd)
         }
@@ -96,6 +107,8 @@ export default function DocumentPage({ params }) {
         <div className="history">
           <input
             type="range"
+            className="scrub"
+            data-scrub
             min={0}
             max={steps}
             value={viewing ?? steps}
@@ -106,26 +119,35 @@ export default function DocumentPage({ params }) {
             }}
           />
           {reading ? (
-            <button type="button" className="now" onClick={() => view(null)}>
+            <button type="button" className="button quiet" data-now onClick={() => view(null)}>
               Back to now
             </button>
           ) : (
-            <span className="hint">
-              drag to see earlier versions · {steps} changes
-            </span>
+            <span className="meta">{steps} changes</span>
           )}
         </div>
       )}
 
-      <footer>
+      <footer className="foot">
         <p>
           {reading
-            ? 'This is how the document looked. Editing is off while you are looking back.'
+            ? 'Reading an earlier version. Editing is off until you come back to now.'
             : 'Share this page’s address to invite someone. The id is hashed before it reaches the server, so the introduction service never learns which document this is.'}
         </p>
       </footer>
     </main>
   );
+}
+
+/**
+ * The letter shown on someone's marker.
+ *
+ * @param {string | undefined} name
+ * @returns {string}
+ */
+function initial(name) {
+  const trimmed = (name ?? '').trim();
+  return trimmed ? [...trimmed][0].toUpperCase() : '?';
 }
 
 /**
@@ -139,8 +161,8 @@ export default function DocumentPage({ params }) {
  * @returns {string}
  */
 function connectionLabel({ online, peers, synced, status }) {
-  if (!online) return 'offline — still saving';
+  if (!online) return 'offline';
   if (peers.length === 0) return status;
-  const who = `${peers.length} other ${peers.length === 1 ? 'person' : 'people'}`;
-  return synced ? `${who} · synced` : `${who} · syncing…`;
+  const who = `${peers.length} other${peers.length === 1 ? '' : 's'}`;
+  return synced ? `${who} · synced` : `${who} · syncing`;
 }
