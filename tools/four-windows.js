@@ -24,7 +24,7 @@ const CHROME =
   process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const docId = `f${Date.now().toString(36)}`;
-const url = `${BASE}/doc/${docId}`;
+const url = `${BASE}/doc?id=${docId}`;
 const WORDS = ['alpha', 'bravo', 'delta', 'echo'];
 /** Milliseconds between keystrokes. Fast typing is around 100ms per character. */
 const DELAY = Number(process.env.TYPE_DELAY ?? 10);
@@ -70,6 +70,25 @@ async function untilAgreed(pages, ms = 40000) {
   return seen;
 }
 
+/**
+ * The address to hand to the next window, once the first has made a key.
+ *
+ * The key lives in the fragment, so a link without it opens a different,
+ * empty document. This is exactly what a person does: copy the address bar.
+ *
+ * @param {import('puppeteer-core').Page} page
+ * @returns {Promise<string>}
+ */
+async function sharedLink(page) {
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    const href = await page.evaluate(() => globalThis.location.href);
+    if (href.includes('#')) return href;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('the first window never put a key in its address');
+}
+
 await fetch(url).catch(() => {}); // compile the route before timing anything
 
 const browser = await puppeteer.launch({
@@ -84,11 +103,14 @@ try {
   // Four separate profiles, so these are four devices rather than four views
   // of one browser's storage.
   const pages = [];
+  let link = url;
   for (let i = 0; i < 4; i += 1) {
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
     page.on('pageerror', (error) => console.log(` window ${i + 1}: ${error.message}`));
-    await page.goto(url, { waitUntil: 'networkidle2' });
+    await page.goto(link, { waitUntil: 'networkidle2' });
+    // The first window mints the key; the rest open the link it produced.
+    if (i === 0) link = await sharedLink(page);
     pages.push(page);
   }
 

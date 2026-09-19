@@ -16,7 +16,10 @@
     "build:web": "npm run build --workspace @meridian/web",
     "two-tabs": "node tools/two-tabs.js",
     "shot": "node tools/shot.js",
-    "four-windows": "node tools/four-windows.js"
+    "four-windows": "node tools/four-windows.js",
+    "desktop": "bash apps/desktop/build.sh && npm start --workspace @meridian/desktop",
+    "desktop:dist": "bash apps/desktop/build.sh && npm run dist --workspace @meridian/desktop",
+    "desktop:check": "bash apps/desktop/build.sh && node apps/desktop/src/launch.cjs --probe"
   },
   "engines": {
     "node": ">=22"
@@ -24,6 +27,8 @@
   "devDependencies": {
     "@types/node": "^22.20.3",
     "@types/ws": "^8.18.1",
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3",
     "fake-indexeddb": "^6.2.5",
     "puppeteer-core": "^25.11.0",
     "typescript": "^5.9.3"

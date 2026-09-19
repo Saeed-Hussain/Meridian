@@ -44,7 +44,7 @@ export default function Home() {
         <button
           type="button"
           className="button"
-          onClick={() => router.push(`/doc/${makeId()}`)}
+          onClick={() => router.push(`/doc?id=${makeId()}`)}
         >
           New document
         </button>
@@ -54,7 +54,7 @@ export default function Home() {
         className="open-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (id.trim()) router.push(`/doc/${encodeURIComponent(id.trim())}`);
+          if (id.trim()) router.push(`/doc?id=${encodeURIComponent(id.trim())}`);
         }}
       >
         <input

@@ -1,16 +1,15 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
-import { useDocument } from '../../../lib/useDocument.js';
-import { ThemeToggle } from '../../theme.jsx';
+import { useEffect, useState } from 'react';
+import { useDocument } from '../../lib/useDocument.js';
+import { ThemeToggle } from '../theme.jsx';
 
 /**
  * The editor.
  *
- * @param {{params: Promise<{id: string}>}} props
+ * @param {{id: string}} props
  */
-export default function DocumentPage({ params }) {
-  const { id } = use(params);
+export default function Editor({ id }) {
   const [name, setName] = useState('');
 
   // The name is only ever shown to the people in this room, and lives here

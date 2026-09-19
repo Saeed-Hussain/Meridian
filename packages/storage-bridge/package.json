@@ -1,0 +1,13 @@
+{
+  "name": "@meridian/storage-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Saves through the desktop application's process, where the database lives.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  }
+}

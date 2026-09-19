@@ -4,7 +4,7 @@ This is the written version of the algorithm in `packages/core`. It is the
 document to read before changing anything in `text.js`.
 
 **Written:** 17 September 2026
-**Covers:** weeks 1 to 10 of the work plan
+**Covers:** weeks 1 to 11 of the work plan
 
 ---
 
@@ -541,7 +541,87 @@ a hard failure would only invite the test to be weakened later.
 
 ---
 
-## 15. How this is tested
+## 15. Encryption
+
+Everything crossing a connection is encrypted with AES-GCM, and the key lives in
+the **fragment** of the link — the part after `#`. Browsers never send a fragment
+to a server, so the key reaches the other person through the link and never
+reaches the introduction service.
+
+That is what turns "the server cannot read your document" from a claim into a
+fact, and there is a test that treats it as one: it captures everything the two
+peers send, then searches it for the typed text, the field values and even the
+protocol's own message names. It fails if anything readable appears.
+
+Two things worth saying plainly rather than burying:
+
+- **The link is the key.** Anyone who has it can read the document, and losing
+  it loses the document, because nothing anywhere else can decrypt it.
+- **This encrypts; it does not authenticate.** A peer holding the key is treated
+  as entitled to the document, which is exactly as strong as link-sharing
+  implies. Identity needs a separate handshake, and pretending otherwise would
+  be worse than saying so.
+
+Encryption sits at the **transport**: `encrypted(channel, key)` wraps a
+connection, and the protocol above is unchanged and unaware. A message is locked
+once, on its way out, and the code deciding *what* to send never thinks about
+it. Every message gets a fresh random nonce, because reusing one with the same
+key in GCM is catastrophic rather than untidy. GCM also authenticates, so a
+message altered in flight fails to decrypt instead of decrypting to something
+else.
+
+---
+
+## 16. The desktop application
+
+The same interface, exported to a folder of files, wrapped in Electron, with a
+real database underneath.
+
+### The page is not trusted
+
+It talks to strangers over WebRTC, so in Electron it is treated the way a
+browser would treat it: no Node, context isolation on, sandbox on, and a
+content-security policy that refuses to load anything from outside the bundle.
+
+Which means the page cannot touch a disk. So SQLite lives in the application
+process, and the page reaches it through a preload exposing **four functions** —
+the store contract the project already defines. Deliberately not one general
+"run this" channel taking a method name and arguments: that would be an open
+door from a page that talks to strangers into the process that can write files.
+
+`BridgeStore` is the other half, and it is run against the **same conformance
+kit** as the memory, SQLite and IndexedDB stores, wired to a real database with
+everything serialised exactly as it is between processes. So "the desktop app
+saves correctly" reduces to "SQLite saves correctly", which was already proven,
+rather than resting on the adapter looking simple.
+
+At runtime the app picks: SQLite through the bridge on the desktop, IndexedDB in
+a browser. Both satisfy the same contract, so nothing above that line differs.
+
+### Three things that had to be got right
+
+| Problem | What happens if you do the obvious thing |
+|---|---|
+| Loading the page | `loadFile` on the exported HTML gives a blank window. The export asks for `/_next/...`, and from a `file://` page a leading slash means the root of the drive. It is served from a private `app://` scheme instead — which also gives the page a stable origin, since a `file://` page has an opaque one and its storage can vanish between runs. |
+| Addressing a document | A path like `/doc/<id>` needs one exported file per document id, which cannot be known in advance. The editor is one page at `/doc?id=…`, with the key still in the fragment. |
+| Starting it | `ELECTRON_RUN_AS_NODE` makes the Electron binary behave as plain Node, and editors built on Electron — VS Code among them — set it in every terminal they open. So `electron .` silently starts a Node process and the first thing the code touches is undefined. The launcher removes the variable. |
+
+Two smaller ones, both found by running it: Electron only takes its product name
+from the build configuration once packaged, so unpackaged it writes its data to
+a directory called `Electron`, shared with every other Electron app in
+development. And the `app://` scheme has to be registered as privileged before
+the app is ready, or the page counts as untrusted and Web Crypto — which the
+encryption depends on — is not available to it.
+
+### Checking it
+
+`npm run desktop:check` starts the application with the window hidden, types
+into the document through the real interface, reopens it, and checks the text
+came back from the SQLite file. A running process proves nothing on its own.
+
+---
+
+## 17. How this is tested
 
 | Test | What it proves |
 |---|---|
@@ -559,6 +639,9 @@ a hard failure would only invite the test to be weakened later.
 | `core/interleave.test.js` | Several people typing in one spot — a quality test, not a correctness one |
 | `tools/two-tabs.js` | The whole thing, in two real browsers |
 | `tools/four-windows.js` | Four windows, two of them cut off and reconnected |
+| `sync/crypto.test.js` | Keys, tampering, and that nothing readable crosses the wire |
+| `storage-bridge` | The desktop store, against the shared conformance kit |
+| `desktop:check` | The packaged interface, typing and reloading, in Electron |
 
 Every run prints its seed. Replay a failure with:
 
@@ -588,7 +671,7 @@ Worth repeating after any change to `text.js`, `id.js` or `session.js`.
 
 ---
 
-## 16. What is known to be missing
+## 18. What is known to be missing
 
 Written down honestly, because a limitation you know about is a plan and one you
 have hidden is a trap.
@@ -606,6 +689,8 @@ have hidden is a trap.
 | **Words interleave under a browser race** | Often, when several windows type into the same spot at the same instant. The algorithm is not the cause — see section 14 | Open |
 | **Stepping through history is O(changes)** | Each move of the slider replays from the start. Fine for a document, not for a long one | Later |
 | **No relay fallback** | A minority of strict networks — symmetric NAT, some corporate firewalls — cannot connect directly at all. The honest answer is a TURN relay, which is not built | Later |
+| **Encryption does not authenticate** | Anyone with the link can read and write. There is no notion of who a peer is | Later |
+| **No installer is produced yet** | `electron-builder` is configured but a signed installer has not been built or tested | Week 12 |
 
 | **IndexedDB is tested against a stand-in** | `fake-indexeddb` exercises the real transaction flow, but not a real browser | Week 9, with the web app |
 

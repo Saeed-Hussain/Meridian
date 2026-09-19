@@ -7,3 +7,8 @@ build/
 .DS_Store
 .env
 .env.local
+
+# The desktop app's copy of the exported interface, rebuilt by its build script.
+apps/desktop/web/
+# electron-builder output.
+apps/desktop/dist/

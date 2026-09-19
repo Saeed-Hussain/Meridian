@@ -17,7 +17,16 @@ import { storeContract } from '@meridian/core/testing';
 import { SqlStore, openSqlite } from '../src/index.js';
 
 const scratch = mkdtempSync(join(tmpdir(), 'meridian-sql-'));
-process.on('exit', () => rmSync(scratch, { recursive: true, force: true }));
+process.on('exit', () => {
+  // Best effort. Windows refuses to unlink a database file that is still open,
+  // and a leftover file in the temporary directory is not worth failing a
+  // passing test run over.
+  try {
+    rmSync(scratch, { recursive: true, force: true });
+  } catch {
+    // Nothing to do about it, and nothing depends on it.
+  }
+});
 
 let counter = 0;
 

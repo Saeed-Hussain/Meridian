@@ -27,6 +27,8 @@
  * somebody joined.
  */
 
+import { encrypted } from './crypto.js';
+
 /** @typedef {import('./session.js').Channel} Channel */
 
 /**
@@ -174,6 +176,10 @@ export class PeerLink {
  * @param {string} options.room A hash of the document id -- never the id itself,
  *   because the signalling server would then know which document this is.
  * @param {import('./network.js').Network} options.network
+ * @param {CryptoKey} [options.key]
+ *   Locks everything crossing the connection. It never leaves this machine —
+ *   it lives in the link's fragment, which browsers do not send to a server.
+ * @param {(why: string) => void} [options.onUnreadable]
  * @param {RTCIceServer[]} [options.ice]
  * @param {(state: string) => void} [options.onState]
  * @returns {{close: () => void}}
@@ -201,7 +207,14 @@ export function joinRoom(options) {
       offering,
       ice: options.ice,
       signal: (data) => send({ t: 'signal', to: id, data }),
-      onOpen: (channel) => options.network.connect(id, channel),
+      onOpen: (channel) =>
+        options.network.connect(
+          id,
+          // Locked at the transport, so the protocol above neither knows nor
+          // cares. Without a key the connection is in the clear, which is only
+          // ever right for a local test.
+          options.key ? encrypted(channel, options.key, { onUnreadable: options.onUnreadable }) : channel,
+        ),
       onClose: () => {
         options.network.disconnect(id);
         links.delete(id);

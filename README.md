@@ -13,18 +13,20 @@ peers to each other — it never sees what you write.
 
 ## Status
 
-**It works.** Weeks 1 to 10 done: browsers edit the same document straight
-through each other, survive being disconnected, and can step back through
-everything that was typed.
+**It works.** Weeks 1 to 11 done: browsers edit the same document straight
+through each other, survive being disconnected, step back through everything
+that was typed — and it runs as a desktop application with its own database.
 
-- 140 tests pass, including hundreds of random convergence runs per seed.
+- 155 tests pass, including hundreds of random convergence runs per seed.
 - Two browser suites drive real Chrome windows over the whole stack.
+- Everything between peers is encrypted, with the key in the link's fragment
+  so the server never receives it — checked by a test that inspects the wire.
 - Typecheck is clean under `strict`, from JSDoc comments — no TypeScript.
 - Zero dependencies in the core. Nothing to install to run its tests.
 - The sync protocol reconciles through 30% packet loss, reordering,
   duplication and network partitions — all seeded, so failures replay exactly.
 
-Next: the desktop app (week 11), then performance and release.
+Next: performance and release (week 12).
 
 ## Try it
 
@@ -58,10 +60,21 @@ npm test            # 126 tests, about three seconds
 npm run typecheck
 npm run two-tabs      # the whole thing, in two real browsers
 npm run four-windows  # four windows, two cut off and reconnected
+npm run desktop:check # the desktop app: type, reopen, read it back from SQLite
 ```
 
 Both browser suites need the app and the signalling server already running, in
 their two terminals, as above.
+
+## On the desktop
+
+```bash
+npm run desktop
+```
+
+Builds the interface and opens it as an application. Changes go to a SQLite file
+in your user data directory rather than to browser storage, so it can be copied,
+backed up, and survives clearing browser data.
 
 ## Documents
 
@@ -93,7 +106,8 @@ packages/storage-idb   saves to IndexedDB, for the browser             BUILT
 packages/sync          the sync protocol, plus the WebRTC transport    BUILT
 server/signal          introduces peers to each other                  BUILT
 apps/web               the editor, in Next.js                          BUILT
-apps/desktop           Electron wrapper                                week 11
+packages/storage-bridge  saves through the desktop app's own process    BUILT
+apps/desktop           the desktop application, in Electron            BUILT
 ```
 
 The core must never import Next.js, React or anything from the browser. That rule is

@@ -28,7 +28,7 @@ const CHROME =
   'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const docId = `t${Date.now().toString(36)}`;
-const url = `${BASE}/doc/${docId}`;
+const url = `${BASE}/doc?id=${docId}`;
 
 let failures = 0;
 
@@ -70,6 +70,25 @@ async function until(page, done, ms = 15000) {
 }
 
 /**
+ * The address to hand to the next window, once the first has made a key.
+ *
+ * The key lives in the fragment, so a link without it opens a different,
+ * empty document. This is exactly what a person does: copy the address bar.
+ *
+ * @param {import('puppeteer-core').Page} page
+ * @returns {Promise<string>}
+ */
+async function sharedLink(page) {
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    const href = await page.evaluate(() => globalThis.location.href);
+    if (href.includes('#')) return href;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('the first window never put a key in its address');
+}
+
+/**
  * @param {import('puppeteer-core').Page} page
  * @param {string} text
  */
@@ -105,7 +124,8 @@ try {
   }
 
   await one.goto(url, { waitUntil: 'networkidle2' });
-  await two.goto(url, { waitUntil: 'networkidle2' });
+  // The second tab opens the *shared* link, key and all.
+  await two.goto(await sharedLink(one), { waitUntil: 'networkidle2' });
 
   // Wait for the two tabs to find each other through the signalling server.
   const met = await until(

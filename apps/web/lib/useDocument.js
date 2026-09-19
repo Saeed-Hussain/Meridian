@@ -11,8 +11,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { open, applyText } from '@meridian/core';
 import { IdbStore } from '@meridian/storage-idb';
+import { BridgeStore } from '@meridian/storage-bridge';
 import { Network } from '@meridian/sync';
 import { joinRoom, roomFor } from '@meridian/sync/webrtc';
+import { keyFromText, keyToText, newKey } from '@meridian/sync';
 
 /** How often to greet peers that have not confirmed they are up to date. */
 const TICK = 3000;
@@ -33,6 +35,43 @@ const TICK = 3000;
  * enough contrast to read.
  */
 const SHADES = [12, 19, 26, 33, 40, 46];
+
+/**
+ * The key for this document, from the link — or a new one, put into the link.
+ *
+ * It lives in the fragment, the part after `#`, because browsers never send a
+ * fragment to a server. So the key reaches the other person through the link
+ * and never reaches the introduction service, which is the whole basis of the
+ * claim that the server cannot read anything.
+ *
+ * The consequence is worth being plain about: the link *is* the key. Anyone
+ * who has it can read the document, and losing it loses the document, because
+ * nothing else can decrypt it.
+ *
+ * @returns {Promise<CryptoKey>}
+ */
+async function keyForDocument() {
+  const fragment = globalThis.location.hash.slice(1);
+  if (fragment) {
+    try {
+      return await keyFromText(fragment);
+    } catch {
+      // A damaged key in the link. Starting a fresh one would silently split
+      // the document in two, so this fails loudly instead.
+      throw new Error('the key in this link is not valid');
+    }
+  }
+
+  const key = await newKey();
+  // `replaceState` rather than assigning to `location.hash`: the latter adds a
+  // history entry, so the back button would step through the same document.
+  history.replaceState(
+    null,
+    '',
+    `${globalThis.location.pathname}${globalThis.location.search}#${await keyToText(key)}`,
+  );
+  return key;
+}
 
 /**
  * Where the introduction service is.
@@ -133,7 +172,11 @@ export function useDocument({ id, name, signalUrl }) {
     let timer = null;
 
     (async () => {
-      const store = await IdbStore.open(`meridian-${id}`);
+      // On the desktop the changes go to a SQLite file through the
+      // application process; in a browser there is no such process and
+      // IndexedDB is the only place to put them. Both satisfy the same
+      // contract and pass the same tests, so nothing below this line differs.
+      const store = BridgeStore.open(id) ?? (await IdbStore.open(`meridian-${id}`));
       const { doc, saved: persistence } = await open(store, { site: tabSite(id) });
       if (!alive) return;
 
@@ -181,10 +224,16 @@ export function useDocument({ id, name, signalUrl }) {
       // The document id is hashed before it becomes a room name, so the
       // signalling server can match two people without learning what they are
       // working on.
+      const key = await keyForDocument();
+      if (!alive) return;
+
       room = joinRoom({
         url: signalAddress(signalUrl),
         room: await roomFor(id),
         network: net,
+        key,
+        onUnreadable: () =>
+          alive && setStatus('someone here has a different link'),
         onState: (state) => alive && setStatus(state),
       });
 
@@ -219,6 +268,7 @@ export function useDocument({ id, name, signalUrl }) {
             url: signalAddress(signalUrl),
             room: await roomFor(id),
             network: net,
+            key,
             onState: (state) => alive && setStatus(state),
           });
         },

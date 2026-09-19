@@ -11,7 +11,7 @@ const BASE = process.env.BASE ?? 'http://localhost:3000';
 const CHROME =
   process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
-const url = `${BASE}/doc/s${Date.now().toString(36)}`;
+const url = `${BASE}/doc?id=s${Date.now().toString(36)}`;
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -47,7 +47,16 @@ try {
   await two.setViewport({ width: 900, height: 620 });
 
   await one.goto(url, { waitUntil: 'networkidle2' });
-  await two.goto(url, { waitUntil: 'networkidle2' });
+
+  // The key is in the fragment, so the second window has to open the link the
+  // first one produced rather than the bare address.
+  let link = url;
+  for (let i = 0; i < 100; i += 1) {
+    link = await one.evaluate(() => globalThis.location.href);
+    if (link.includes('#')) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  await two.goto(link, { waitUntil: 'networkidle2' });
 
   await one.$eval('.name', (box) => {
     const input = /** @type {HTMLInputElement} */ (box);
