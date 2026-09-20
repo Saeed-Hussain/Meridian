@@ -34,6 +34,22 @@ export class Doc {
     /** @type {Set<(ops: Op[]) => void>} */
     this.listeners = new Set();
     /**
+     * Called just before anything from elsewhere is applied.
+     *
+     * An editor needs this. A text box holds a typed character for a moment
+     * before the code that owns the document hears about it, and a change
+     * arriving from a peer inside that moment lands on a document that does
+     * not yet contain what the person just typed. Whatever happens next is
+     * wrong: the character is attached to the wrong neighbour, or overwritten
+     * outright.
+     *
+     * This is the one point where a caller can hand over what it is still
+     * holding, so the two changes are applied in the order they really
+     * happened.
+     * @type {Set<() => void>}
+     */
+    this.beforeListeners = new Set();
+    /**
      * The state history starts from, once older changes have been trimmed.
      *
      * Without it, stepping back to the beginning after compacting showed an
@@ -119,6 +135,8 @@ export class Doc {
    * @returns {Op[]} The ones that were new.
    */
   receive(ops) {
+    if (ops.length > 0) this.settleFirst();
+
     /** @type {Op[]} */
     const fresh = [];
     for (const op of ops) {
@@ -207,6 +225,7 @@ export class Doc {
    * @param {any} state From `snapshot()`.
    */
   mergeState(state) {
+    this.settleFirst();
     this.text.mergeState(state.text);
     this.fields.mergeState(state.fields);
     this.tags.mergeState(state.tags);
@@ -281,6 +300,28 @@ export class Doc {
   onChange(listener) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Be told just before anything from elsewhere is applied.
+   *
+   * For a caller holding an edit that has not reached the document yet. See
+   * the note on `beforeListeners`.
+   *
+   * @param {() => void} listener
+   * @returns {() => void} Call to stop listening.
+   */
+  onBeforeChange(listener) {
+    this.beforeListeners.add(listener);
+    return () => this.beforeListeners.delete(listener);
+  }
+
+  /**
+   * Give everyone holding an unapplied edit the chance to apply it first.
+   * @private
+   */
+  settleFirst() {
+    for (const listener of this.beforeListeners) listener();
   }
 
   /**

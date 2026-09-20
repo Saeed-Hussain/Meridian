@@ -146,6 +146,16 @@ export function useDocument({ id, name, signalUrl }) {
    */
   const viewingRef = useRef(null);
 
+  /**
+   * The text this code last agreed the box was showing.
+   *
+   * Anything in the box that differs from this is a keystroke the document has
+   * not been told about yet. That is the whole basis of the flush below: it is
+   * how a change arriving from a peer can tell what it is about to trample.
+   * @type {{current: string}}
+   */
+  const shownRef = useRef('');
+
   const nameRef = useRef(name);
   useEffect(() => {
     nameRef.current = name;
@@ -206,6 +216,28 @@ export function useDocument({ id, name, signalUrl }) {
           () => alive && setSaved(true),
           (error) => alive && setStatus(`could not save: ${error.message}`),
         );
+      });
+
+      // Take in anything still sitting in the box before a change from a peer
+      // is applied.
+      //
+      // The browser puts a typed character into the box and tells this code
+      // about it a moment later. A change arriving inside that moment used to
+      // land on a document that did not yet contain the character, so the
+      // character was then placed against the wrong neighbour — two people
+      // typing in one spot produced interleaved words. Applying it first puts
+      // the two changes in the order they actually happened.
+      const stopFlushing = doc.onBeforeChange(() => {
+        const box = boxRef.current;
+        if (!box || viewingRef.current !== null) return;
+        if (box.value === shownRef.current) return;
+
+        shownRef.current = box.value;
+        const { change } = applyText(doc, box.value);
+        if (change) {
+          const end = doc.text.anchorAt(change.at + [...change.added].length);
+          anchorRef.current = { start: end, end };
+        }
       });
 
       const stopPresence = net.onPresence((present) => {
@@ -276,6 +308,7 @@ export function useDocument({ id, name, signalUrl }) {
 
       return () => {
         stopWatching();
+        stopFlushing();
         stopPresence();
       };
     })().catch((error) => {
@@ -302,6 +335,12 @@ export function useDocument({ id, name, signalUrl }) {
   const edit = useCallback((next, caretStart, caretEnd) => {
     const doc = docRef.current;
     if (!doc || viewingRef.current !== null) return;
+
+    // What the box holds is now the document's problem, not the box's.
+    // Recording it here is what lets a remote change arriving mid-keystroke
+    // tell the difference between text this code has already taken in and
+    // text it has not.
+    shownRef.current = next;
 
     const { change } = applyText(doc, next);
 
@@ -369,6 +408,7 @@ export function useDocument({ id, name, signalUrl }) {
   function showInBox(value) {
     const doc = docRef.current;
     const box = boxRef.current;
+    shownRef.current = value;
     if (!box || box.value === value) return;
 
     const start = doc ? doc.text.indexAfter(anchorRef.current.start) : value.length;

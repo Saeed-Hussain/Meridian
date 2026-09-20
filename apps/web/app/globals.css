@@ -108,6 +108,8 @@ input {
   border: 1px solid var(--ink);
   border-radius: var(--radius);
   cursor: pointer;
+  /* A link styled as a button should not also be underlined like a link. */
+  text-decoration: none;
   transition: opacity 120ms ease;
 }
 
@@ -503,5 +505,343 @@ code {
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+  }
+}
+
+/* =========================================================== landing page ==
+ *
+ * Still no colour. The page is carried by type, rule lines and space, which
+ * is a harder brief than a palette and the reason it holds up inverted.
+ */
+
+.page {
+  --edge: clamp(1.25rem, 6vw, 4rem);
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem var(--edge);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.top .mark {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.top nav {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-left: auto;
+  font-size: var(--text-sm);
+}
+
+.top nav a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.top nav a:hover {
+  color: var(--ink);
+}
+
+/* Narrow enough that left-aligned text reads as a column rather than as
+   something stranded beside an empty half-page. */
+section {
+  padding: clamp(3.5rem, 9vw, 6.5rem) var(--edge);
+  max-width: 58rem;
+  margin: 0 auto;
+}
+
+section + section {
+  border-top: 1px solid var(--line);
+}
+
+.eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 1.25rem;
+}
+
+h2 {
+  font-size: clamp(1.5rem, 3.4vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  margin: 0 0 1rem;
+  max-width: 24ch;
+}
+
+.prose {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 62ch;
+  margin: 0 0 1rem;
+}
+
+.prose strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------- hero */
+
+.hero {
+  padding-top: clamp(3.5rem, 11vw, 7.5rem);
+  padding-bottom: clamp(3rem, 8vw, 5rem);
+}
+
+.hero h1 {
+  font-size: clamp(2.4rem, 7vw, 4.25rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.03;
+  margin: 0 0 1.5rem;
+  max-width: 17ch;
+  text-wrap: balance;
+}
+
+.hero .prose {
+  font-size: clamp(1rem, 1.6vw, 1.1875rem);
+  max-width: 52ch;
+}
+
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 2.25rem;
+}
+
+.button.big {
+  padding: 0.7rem 1.4rem;
+  font-size: 0.9375rem;
+}
+
+.aside {
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  margin-top: 1rem;
+}
+
+/* --------------------------------------------------------------- diagram */
+
+.diagram {
+  margin: clamp(2.5rem, 6vw, 4rem) 0 0;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--sunken);
+}
+
+.diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--ink);
+}
+
+.caption {
+  margin: 1rem 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+/* ----------------------------------------------------------------- steps */
+
+.steps {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+  counter-reset: step;
+}
+
+.steps li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  gap: 1.25rem;
+  padding: 1.35rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.steps li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.steps li::before {
+  content: counter(step, decimal-leading-zero);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  padding-top: 0.28rem;
+}
+
+.steps h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  margin: 0 0 0.3rem;
+}
+
+.steps p {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: 58ch;
+}
+
+/* --------------------------------------------------------------- feature grid */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1px;
+  margin-top: 2.25rem;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cell {
+  background: var(--paper);
+  padding: 1.5rem 1.4rem;
+}
+
+.cell h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.4rem;
+}
+
+.cell p {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+/* -------------------------------------------------------------- the numbers */
+
+.numbers {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 2rem;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.numbers th {
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 0 0 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.numbers td {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.numbers td:first-child {
+  color: var(--ink);
+}
+
+.numbers td:not(:first-child) {
+  text-align: right;
+  width: 7.5rem;
+}
+
+.numbers tr.lead td {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------------- close */
+
+.close {
+  text-align: center;
+}
+
+.close h2 {
+  margin-inline: auto;
+  max-width: 18ch;
+}
+
+.close .prose {
+  margin-inline: auto;
+}
+
+.close .cta {
+  justify-content: center;
+}
+
+.open-inline {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 26rem;
+  margin: 2.5rem auto 0;
+}
+
+.open-inline .field {
+  flex: 1;
+}
+
+.foot-note {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 1.25rem;
+  padding: 1.75rem var(--edge) 3rem;
+  border-top: 1px solid var(--line);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+.foot-note a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.foot-note a:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 40rem) {
+  .top nav a.hide-small {
+    display: none;
+  }
+
+  .steps li {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .steps li::before {
+    padding-top: 0;
   }
 }
