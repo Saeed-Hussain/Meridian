@@ -539,6 +539,29 @@ The browser test prints `words kept whole: n/4` rather than failing on it, so
 the number stays visible and a change for better or worse is obvious. Making it
 a hard failure would only invite the test to be weakened later.
 
+### A fix that did not work
+
+Worth recording, because a fix that sounds right and changes nothing is more
+useful written down than quietly forgotten.
+
+The browser hands a typed character to the text box and tells the application
+about it a moment later. A change arriving from a peer inside that moment lands
+on a document that does not yet contain the character — so the character is
+then placed against whatever arrived, rather than where it was typed. That is a
+real window, and closing it looked like the answer.
+
+`Doc.onBeforeChange` closes it: the editor hands over whatever is still sitting
+in the box before anything from a peer is applied. It is correct, it is covered
+by seven tests, and it stays.
+
+It made no measurable difference. Six runs afterwards: 2, 4, 2, 4, 2, 2 out of
+four words whole — the same roughly one in three as before. So whatever
+dominates here is something else, and the next attempt should start by finding
+out what rather than by guessing again. The likely candidates are React's own
+input handling and the order in which a `<textarea>` reports a selection, both
+of which point at the same conclusion the cursor work already reached: a real
+editor needs a rendered surface rather than a text box.
+
 ---
 
 ## 15. Encryption
@@ -792,7 +815,7 @@ have hidden is a trap.
 | **The WebRTC transport has no unit tests** | `src/webrtc.js` cannot run in Node. It is now covered end to end by `tools/two-tabs.js`, which drives two real browsers, but not by the ordinary suite | Stands |
 | **Remote cursors are not drawn** | Their positions arrive and are held; a plain `<textarea>` cannot paint another person's caret. Needs a rendered editor rather than a text box | Later |
 | **Plain text only** | No formatting, and the field and tag types are not yet used by the interface | Later |
-| **Words interleave under a browser race** | Often, when several windows type into the same spot at the same instant. The algorithm is not the cause — see section 14 | Open |
+| **Words interleave under a browser race** | Often, when several windows type into the same spot at the same instant. The algorithm is not the cause, and the obvious fix was tried and measured no better — see section 14 | Open |
 | **Stepping through history is O(changes)** | Each move of the slider replays from the start. Fine for a document, not for a long one | Later |
 | **Rendering is O(document)** | The 5.6ms keystroke at 100,000 characters is almost all of it. Needs a rope to improve | Later |
 | **Loading a long document takes half a second** | Every change is replayed on open. Compacting helps; an index would help more | Later |
